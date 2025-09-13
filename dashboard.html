@@ -1,0 +1,171 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Bixolon Emulator Dashboard</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+<style>
+  body { background:#f4f6f9; padding:16px; font-family:Inter, Arial, sans-serif; }
+  .grid { display:grid; grid-template-columns: 320px 1fr 320px; grid-template-rows: 1fr 200px; gap:16px; height: calc(100vh - 32px); }
+  .panel { background:#fff; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.06); padding:12px; overflow:auto; }
+  .history-item { display:flex; justify-content:space-between; align-items:center; padding:6px 4px; border-bottom:1px solid #eee; }
+  .viewer { display:flex; justify-content:center; align-items:center; height:100%; }
+  .img-preview { max-width:100%; max-height:100%; border:1px solid #ddd; background:#fff; padding:6px; }
+  .trace { font-family:monospace; font-size:12px; height:100%; overflow:auto; background:#0f1724; color:#c9f7ff; padding:8px; border-radius:6px; }
+  .printer-info dt { font-weight:600; }
+  .upload-box { border:2px dashed #ced4da; padding:12px; text-align:center; }
+</style>
+</head>
+<body>
+<div class="container-fluid">
+  <h3>Bixolon SP300 Emulator</h3>
+  <div class="grid mt-3">
+    <!-- Left: History -->
+    <div class="panel" id="left-history">
+      <h5>Print History</h5>
+      <div id="history-list"></div>
+      <nav aria-label="Page navigation example"><ul class="pagination mt-2" id="history-pager"></ul></nav>
+    </div>
+
+    <!-- Center: Viewer -->
+    <div class="panel">
+      <h5>Viewer</h5>
+      <div class="viewer" id="viewer-area">
+        <span class="text-muted">No print selected</span>
+      </div>
+
+      <hr>
+      <h6>Upload image to /to_print (will trigger print)</h6>
+      <form id="uploadForm">
+        <div class="input-group">
+          <input class="form-control" type="file" name="image" accept="image/*" required>
+          <button class="btn btn-primary" type="submit">Upload & Print</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Right: Printer Info -->
+    <div class="panel">
+      <h5>Printer Info</h5>
+      <dl class="printer-info">
+        <dt>Name</dt><dd id="p-name">-</dd>
+        <dt>Protocol</dt><dd id="p-proto">-</dd>
+        <dt>Port</dt><dd id="p-port">-</dd>
+        <dt>Queue</dt><dd id="p-queue">0</dd>
+      </dl>
+
+      <hr>
+      <h6>Current Print</h6>
+      <div id="current-print-meta" style="font-size:13px;color:#444"></div>
+    </div>
+
+    <!-- Bottom full-width: Trace / Queue details -->
+    <div class="panel" style="grid-column:1 / 4;">
+      <div class="row">
+        <div class="col-md-6">
+          <h6>Live Trace</h6>
+          <div id="trace" class="trace"></div>
+        </div>
+        <div class="col-md-6">
+          <h6>Pending Queue</h6>
+          <div id="pending-queue"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  const ws = new WebSocket(`ws://${location.host}`);
+  let historyData = [];
+  let selected = null;
+
+  ws.onmessage = (ev) => {
+    try {
+      const payload = JSON.parse(ev.data);
+      if (payload.type === 'status') {
+        updatePrinter(payload.printer);
+        updateQueue(payload.queue);
+        updateHistory(payload.history);
+        updateTrace(payload.trace);
+      }
+    } catch (err) { console.error(err); }
+  };
+
+  function updatePrinter(p) {
+    document.getElementById('p-name').textContent = p.name;
+    document.getElementById('p-proto').textContent = p.protocol;
+    document.getElementById('p-port').textContent = p.port;
+    document.getElementById('p-queue').textContent = p.queueLength;
+    // current print
+    const curr = p.lastJobs && p.lastJobs[0];
+    if (curr) {
+      document.getElementById('current-print-meta').innerHTML = `<b>${curr.type}</b> - ${curr.file} <br><small>${new Date(curr.processedAt).toLocaleString()}</small>`;
+      // if viewer empty, show this latest
+      if (!selected) showImage(curr.file);
+    }
+  }
+
+  function updateQueue(q) {
+    const container = document.getElementById('pending-queue');
+    if (!q || q.length === 0) { container.innerHTML = '<div class="text-muted">No pending jobs</div>'; return; }
+    container.innerHTML = q.map(it => `<div style="padding:6px;border-bottom:1px solid #eee">${it.type} - ${it.meta && it.meta.source ? it.meta.source : ''}</div>`).join('');
+  }
+
+  function updateHistory(h) {
+    historyData = h;
+    const list = document.getElementById('history-list');
+    list.innerHTML = '';
+    if (!h || h.length === 0) {
+      list.innerHTML = '<div class="text-muted">No prints yet</div>';
+      return;
+    }
+    h.forEach((item, idx) => {
+      const div = document.createElement('div');
+      div.className = 'history-item';
+      div.innerHTML = `<div><small>${new Date(item.processedAt).toLocaleString()}</small><div><b>${item.type}</b> ${item.file}</div></div>
+        <div><button class="btn btn-sm btn-outline-primary" onclick="onView(${idx})">View</button></div>`;
+      list.appendChild(div);
+    });
+  }
+
+  function updateTrace(trace) {
+    const t = document.getElementById('trace');
+    t.innerHTML = trace.map(r => `[${new Date(r.ts).toLocaleTimeString()}] ${r.entry}`).join('<br>');
+    t.scrollTop = t.scrollHeight;
+  }
+
+  function onView(idx) {
+    const item = historyData[idx];
+    if (!item) return;
+    selected = item;
+    showImage(item.file);
+  }
+
+  function showImage(filename) {
+    const viewer = document.getElementById('viewer-area');
+    viewer.innerHTML = '';
+    const img = document.createElement('img');
+    img.className = 'img-preview';
+    img.src = `/prints/${filename}`;
+    img.onerror = () => { viewer.innerHTML = '<div class="text-muted">Image not available</div>'; };
+    viewer.appendChild(img);
+  }
+
+  // upload form
+  const form = document.getElementById('uploadForm');
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const f = form.elements['image'].files[0];
+    if (!f) return alert('Select an image');
+    const fd = new FormData();
+    fd.append('image', f);
+    const res = await fetch('/api/upload', { method: 'POST', body: fd });
+    const j = await res.json();
+    if (j.ok) alert('Uploaded and queued: ' + j.file);
+  });
+</script>
+</body>
+</html>

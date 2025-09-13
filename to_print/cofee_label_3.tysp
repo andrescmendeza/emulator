@@ -1,0 +1,23 @@
+
+START_LABEL
+SIZE 80,50    # 80x50 mm
+GAP 2
+
+
+TEXT 30,30,35,35,"Caramel Latte"
+
+TEXT 30,70,30,30,"Tamaño: M"
+
+TEXT 30,100,30,30,"Cliente: Ana Gómez"
+
+TEXT 30,130,25,25,"Fecha: 2025-09-12"
+TEXT 30,160,25,25,"Hora: 15:45"
+
+TEXT 30,190,25,25,"Leche: Deslactosada"
+TEXT 30,220,25,25,"Sabor: Vainilla"
+
+BARCODE 30,250,128,60,"012345678901"
+
+TEXT 30,330,20,20,"Promoción: 2x1 hoy!"
+
+END_LABEL
