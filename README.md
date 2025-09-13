@@ -31,12 +31,40 @@ Then visit:
 
 ### 1. Send TYSP Command
 ```bash
-echo "^XA^FO50,50^A0N,40,40^FDLatte - Medium^FS^FO50,100^BCN,100,Y,N,N^FD987654321^FS^XZ" | nc localhost 9100
+nc localhost 9100 <<'EOF'
+TEXT 50,20,"0",0,2,2,"Starbucks Coffee"
+TEXT 50,70,"0",0,1,1,"Latte - Medium"
+TEXT 50,110,"0",0,1,1,"Order: #12345"
+TEXT 50,150,"0",0,1,1,"Cashier: Alice"
+
+LINE 40,180,400,180,2
+BOX 40,190,400,300,2
+
+TEXT 60,210,"0",0,1,1,"Extra Shot"
+TEXT 60,240,"0",0,1,1,"Soy Milk"
+TEXT 60,270,"0",0,1,1,"Sugar-free Syrup"
+
+BARCODE 50,320,"128",80,1,0,2,2,"12345"
+
+QRCODE 250,320,"M",6,6,"https://starbucks.com/order/12345"
+
+LINE 40,420,400,420,2
+
+TEXT 50,440,"0",0,1,1,"Date: 2025-09-13 11:30"
+TEXT 50,470,"0",0,1,1,"Thank you for your visit!"
+PRINT
+EOF
+
+
 ```
 
 ### 2. Send ESC/POS Command
 ```bash
 echo "Latte - Medium\nPrice: $2.99\n[Barcode: 987654321]" | nc localhost 9100
+
+
+printf "\x1B\x40\x1B\x61\x01Latte - Medium\n\n\x1D\x6B\x04987654321\x00\n\n\n" | nc localhost 9100
+
 ```
 
 ### 3. Drop an Image

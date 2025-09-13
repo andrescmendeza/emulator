@@ -1,12 +1,11 @@
-
-// server/tcpServer.js
 const net = require('net');
 
 function looksLikeTysp(text) {
-  return /\[TEXT\]|\[ALIGN\]|\[FEED\]|\[BARCODE\]|\[QRCODE\]/i.test(text);
+  // Detect real Bixolon SP300 commands
+  return /^(TEXT|BARCODE|QRCODE|PRINT)/mi.test(text);
 }
 
-function start(port, queue, printerInfo) {
+function start(port, queue, printerInfo, renderTicket) {
   const server = net.createServer(socket => {
     const remote = socket.remoteAddress + ':' + socket.remotePort;
     console.log(`:satellite_antenna: TCP client connected: ${remote}`);
@@ -14,12 +13,12 @@ function start(port, queue, printerInfo) {
 
     socket.on('data', (chunk) => {
       chunks.push(chunk);
-      // don't decide until 'end' to allow binary streams
     });
 
-    socket.on('end', () => {
+    socket.on('end', async () => {
       const buffer = Buffer.concat(chunks);
-      // IMG protocol (simple): starts with 'IMG\n'
+
+      // detect image protocol
       if (buffer.slice(0,4).toString() === 'IMG\n') {
         const imageBuffer = buffer.slice(4);
         queue.addJob({ type: 'image', data: imageBuffer, meta: { source: remote, ext: 'png' } });
@@ -29,10 +28,21 @@ function start(port, queue, printerInfo) {
       }
 
       const asText = buffer.toString('utf8');
+
       if (looksLikeTysp(asText)) {
         queue.addJob({ type: 'tysp', data: asText, meta: { source: remote } });
         socket.write('OK');
         socket.end();
+
+        // split commands and call renderTicket on PRINT
+        const commands = asText.split('\n').map(c => c.trim()).filter(c => c);
+        if (commands.includes('PRINT') && typeof renderTicket === 'function') {
+          try {
+            await renderTicket(commands);
+          } catch(err) {
+            console.error('Error rendering ticket:', err);
+          }
+        }
         return;
       }
 
@@ -45,7 +55,7 @@ function start(port, queue, printerInfo) {
         return;
       }
 
-      // fallback: treat as text/tysp
+      // fallback
       queue.addJob({ type: 'tysp', data: asText, meta: { source: remote } });
       socket.write('OK');
       socket.end();

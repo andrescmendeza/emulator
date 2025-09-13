@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -99,12 +98,13 @@
     document.getElementById('p-proto').textContent = p.protocol;
     document.getElementById('p-port').textContent = p.port;
     document.getElementById('p-queue').textContent = p.queueLength;
+
     // current print
     const curr = p.lastJobs && p.lastJobs[0];
     if (curr) {
       document.getElementById('current-print-meta').innerHTML = `<b>${curr.type}</b> - ${curr.file} <br><small>${new Date(curr.processedAt).toLocaleString()}</small>`;
-      // if viewer empty, show this latest
-      if (!selected) showImage(curr.file);
+      // show latest ticket in viewer if no selection
+      if (!selected) showTicket();
     }
   }
 
@@ -141,18 +141,24 @@
     const item = historyData[idx];
     if (!item) return;
     selected = item;
-    showImage(item.file);
+    showTicket(item.file);
   }
 
-  function showImage(filename) {
+  // show rendered ticket from to_print/latest_ticket.png
+  function showTicket(fileName) {
     const viewer = document.getElementById('viewer-area');
     viewer.innerHTML = '';
     const img = document.createElement('img');
     img.className = 'img-preview';
-    img.src = `/prints/${filename}`;
+    img.src = fileName ? `/prints/${fileName}` : `/to_print/latest_ticket.png?rand=${Math.random()}`;
     img.onerror = () => { viewer.innerHTML = '<div class="text-muted">Image not available</div>'; };
     viewer.appendChild(img);
   }
+
+  // periodically refresh the latest ticket if no manual selection
+  setInterval(() => {
+    if (!selected) showTicket();
+  }, 1000);
 
   // upload form
   const form = document.getElementById('uploadForm');
