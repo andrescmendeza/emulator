@@ -6,6 +6,7 @@ const BWIPJS = require('bwip-js');
 const PrintQueue = require('./printer/printQueue');
 const PrinterInfo = require('./printer/printerInfo');
 const tcpServer = require('./server/tcpServer');
+const tcpServerL90 = require('./server/tcpServerL90');
 const fsWatcher = require('./server/fsWatcher');
 const webServer = require('./server/webServer');
 
@@ -24,6 +25,10 @@ const queue = new PrintQueue(PRINTS_DIR);
 const printBuffer = new PrintBuffer(20); // buffer size configurable
 const printerMemory = new PrinterMemory(40, 20); // graphics/fonts memory configurable
 const printerInfo = new PrinterInfo('Bixolon SP300 Emulator', 9100, 'TCP', queue);
+
+// --- Epson L90 TCP Service ---
+const queueL90 = new PrintQueue(PRINTS_DIR);
+const printerInfoL90 = new PrinterInfo('Epson L90 Emulator', 9200, 'TCP', queueL90);
 
 // Render ticket for Bixolon SP300 commands
 async function renderTicket(commands) {
@@ -81,8 +86,10 @@ async function renderTicket(commands) {
   out.on('finish', () => console.log('Ticket rendered in:', outPath));
 }
 
+
 // Start services
 tcpServer.start(9100, queue, printerInfo, renderTicket);
+tcpServerL90.start(9200, queueL90, printerInfoL90, renderTicket); // L90 on port 9200
 fsWatcher.start(TO_PRINT_DIR, queue);
 webServer.start(8080, queue, printerInfo);
 
@@ -94,7 +101,9 @@ if (runTest) {
 
 // Pass printBuffer and printerMemory to servers as needed (future integration)
 
+
 console.log(':white_check_mark: Emulator started');
-console.log(' - TCP port: 9100');
+console.log(' - Bixolon SP300 TCP port: 9100');
+console.log(' - Epson L90 TCP port: 9200');
 console.log(' - Web panel: http://localhost:8080');
 console.log(` - Drop images into: ${TO_PRINT_DIR}`);
