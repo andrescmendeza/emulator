@@ -24,6 +24,17 @@
     <!-- Left: History -->
     <div class="panel" id="left-history">
       <h5>Print History</h5>
+      <div class="mb-2" id="history-filters">
+        <select id="filter-type" class="form-select form-select-sm" style="width:auto;display:inline-block">
+          <option value="">All Types</option>
+          <option value="tysp">TYSP</option>
+          <option value="escpos">ESC/POS</option>
+          <option value="image">Image</option>
+        </select>
+        <input id="filter-text" class="form-control form-control-sm ms-1" style="width:120px;display:inline-block" placeholder="Text...">
+        <input id="filter-date" type="date" class="form-control form-control-sm ms-1" style="width:140px;display:inline-block">
+        <button class="btn btn-sm btn-outline-secondary ms-1" onclick="clearFilters()">Clear</button>
+      </div>
       <div id="history-list"></div>
       <nav aria-label="Page navigation example"><ul class="pagination mt-2" id="history-pager"></ul></nav>
     </div>
@@ -36,17 +47,95 @@
       </div>
 
       <hr>
-      <h6>Upload image to /to_print (will trigger print)</h6>
+      <h6>Upload image or TYSP/ESC/POS file to /to_print (will trigger print)</h6>
+      <div id="drop-area" class="upload-box mb-2" tabindex="0">
+        <span id="drop-area-text">Drag & drop files here, or click to select</span>
+        <input type="file" id="drop-file-input" style="display:none" multiple accept="image/*,.tysp,.txt,.bin,.prn">
+      </div>
       <form id="uploadForm">
         <div class="input-group">
           <input class="form-control" type="file" name="image" accept="image/*" required>
           <button class="btn btn-primary" type="submit">Upload & Print</button>
         </div>
       </form>
+      <div id="upload-status" style="font-size:13px;color:#1976d2;margin-top:4px;"></div>
+</script>
+<script>
+// Drag-and-drop upload logic
+const dropArea = document.getElementById('drop-area');
+const dropInput = document.getElementById('drop-file-input');
+const uploadStatus = document.getElementById('upload-status');
+if (dropArea && dropInput) {
+  ['dragenter','dragover'].forEach(ev => dropArea.addEventListener(ev, e => {
+    e.preventDefault(); e.stopPropagation();
+    dropArea.style.background = '#e3f2fd';
+    dropArea.style.borderColor = '#1976d2';
+  }));
+  ['dragleave','drop'].forEach(ev => dropArea.addEventListener(ev, e => {
+    e.preventDefault(); e.stopPropagation();
+    dropArea.style.background = '';
+    dropArea.style.borderColor = '';
+  }));
+  dropArea.addEventListener('drop', e => {
+    const files = e.dataTransfer.files;
+    if (files && files.length) handleFiles(files);
+  });
+  dropArea.addEventListener('click', () => dropInput.click());
+  dropInput.addEventListener('change', e => {
+    if (dropInput.files && dropInput.files.length) handleFiles(dropInput.files);
+  });
+}
+
+function handleFiles(files) {
+  uploadStatus.textContent = '';
+  Array.from(files).forEach(file => {
+    const formData = new FormData();
+    formData.append('image', file); // backend expects 'image' for all
+    uploadStatus.textContent = `Uploading ${file.name}...`;
+    fetch('/api/upload', {
+      method: 'POST',
+      body: formData
+    }).then(async r => {
+      if (r.ok) {
+        uploadStatus.textContent = `Uploaded ${file.name}!`;
+        setTimeout(() => { uploadStatus.textContent = ''; }, 2000);
+      } else {
+        const err = await r.text();
+        uploadStatus.textContent = `Error uploading ${file.name}: ${err}`;
+      }
+    }).catch(err => {
+      uploadStatus.textContent = `Error uploading ${file.name}: ${err}`;
+    });
+  });
+}
+</script>
     </div>
 
-    <!-- Right: Printer Info -->
+    <!-- Right: Printer Panel -->
     <div class="panel">
+      <h5>Printer Panel</h5>
+      <div id="printer-visual" style="display:flex;align-items:center;gap:18px;margin-bottom:12px;">
+        <div style="width:60px;height:60px;position:relative;">
+          <div id="led-power" style="width:16px;height:16px;border-radius:50%;background:#0f0;position:absolute;left:0;top:0;border:2px solid #222;"></div>
+          <div id="led-error" style="width:16px;height:16px;border-radius:50%;background:#d32f2f;position:absolute;left:0;top:22px;border:2px solid #222;opacity:0.2;"></div>
+          <div id="led-paper" style="width:16px;height:16px;border-radius:50%;background:#ffeb3b;position:absolute;left:0;top:44px;border:2px solid #222;opacity:0.2;"></div>
+          <div id="led-ink" style="width:16px;height:16px;border-radius:50%;background:#607d8b;position:absolute;left:22px;top:0;border:2px solid #222;opacity:0.2;"></div>
+          <div id="led-cover" style="width:16px;height:16px;border-radius:50%;background:#fbc02d;position:absolute;left:22px;top:22px;border:2px solid #222;opacity:0.2;"></div>
+        </div>
+        <div style="flex:1;">
+          <div id="lcd-panel" style="font-family:monospace;font-size:15px;background:#222;color:#0f0;padding:8px 12px;border-radius:6px;min-height:38px;letter-spacing:1px;transition:background 0.2s, color 0.2s;">Ready</div>
+          <div id="lcd-alerts" style="margin-top:8px;"></div>
+        </div>
+      </div>
+      <div class="mb-2" id="error-controls">
+        <label class="form-label mb-1">Simulate Errors:</label>
+        <div class="btn-group btn-group-sm" role="group">
+          <button class="btn btn-outline-danger" onclick="setError('PAPER_OUT')">Paper Out</button>
+          <button class="btn btn-outline-warning" onclick="setError('COVER_OPEN')">Cover Open</button>
+          <button class="btn btn-outline-secondary" onclick="setError('NO_INK')">No Ink</button>
+          <button class="btn btn-outline-success" onclick="clearErrors()">Clear</button>
+        </div>
+      </div>
       <h5>Printer Info</h5>
       <dl class="printer-info">
         <dt>Name</dt><dd id="p-name">-</dd>
@@ -54,10 +143,34 @@
         <dt>Port</dt><dd id="p-port">-</dd>
         <dt>Queue</dt><dd id="p-queue">0</dd>
       </dl>
+      <hr>
+      <h6>Printer Config</h6>
+      <form id="printer-config-form" class="mb-2" style="font-size:13px">
+        <div class="row g-1 align-items-center">
+          <div class="col-auto"><label for="cfg-width" class="col-form-label">Width</label></div>
+          <div class="col-auto"><input id="cfg-width" type="number" min="100" max="1200" class="form-control form-control-sm" style="width:70px"></div>
+          <div class="col-auto"><label for="cfg-length" class="col-form-label">Length</label></div>
+          <div class="col-auto"><input id="cfg-length" type="number" min="100" max="2000" class="form-control form-control-sm" style="width:70px"></div>
+          <div class="col-auto"><label for="cfg-mode" class="col-form-label">Mode</label></div>
+          <div class="col-auto"><select id="cfg-mode" class="form-select form-select-sm" style="width:100px">
+            <option value="NORMAL">NORMAL</option>
+            <option value="TEAR_OFF">TEAR_OFF</option>
+            <option value="PEEL_OFF">PEEL_OFF</option>
+          </select></div>
+          <div class="col-auto"><button type="submit" class="btn btn-sm btn-primary">Save</button></div>
+        </div>
+      </form>
+      <div id="cfg-status" style="font-size:12px;color:#1976d2"></div>
 
       <hr>
       <h6>Current Print</h6>
       <div id="current-print-meta" style="font-size:13px;color:#444"></div>
+
+      <hr>
+      <h6>Printer LCD / Status</h6>
+      <div id="lcd-panel" style="font-family:monospace;font-size:15px;background:#222;color:#0f0;padding:8px 12px;border-radius:6px;min-height:38px;letter-spacing:1px;transition:background 0.2s, color 0.2s;">Ready</div>
+      <div id="lcd-alerts" style="margin-top:8px;"></div>
+      <button class="btn btn-sm btn-outline-secondary mt-2" onclick="downloadLogs()">Download Full Log</button>
     </div>
 
     <!-- Bottom full-width: Trace / Queue details -->
@@ -65,10 +178,22 @@
       <div class="row">
         <div class="col-md-6">
           <h6>Live Trace</h6>
+          <div class="mb-2" id="trace-controls">
+            <input id="trace-search" class="form-control form-control-sm" style="width:140px;display:inline-block" placeholder="Search...">
+            <button class="btn btn-sm btn-outline-secondary ms-1" onclick="tracePrev()">Prev</button>
+            <button class="btn btn-sm btn-outline-secondary ms-1" onclick="traceNext()">Next</button>
+            <button class="btn btn-sm btn-outline-success ms-1" onclick="exportTrace()">Export</button>
+          </div>
           <div id="trace" class="trace"></div>
+          <div id="trace-pager" style="font-size:12px;color:#888;margin-top:2px;"></div>
         </div>
         <div class="col-md-6">
-          <h6>Pending Queue</h6>
+          <h6>Pending Queue
+            <button class="btn btn-sm btn-outline-primary ms-1" onclick="queuePause()">Pause</button>
+            <button class="btn btn-sm btn-outline-success ms-1" onclick="queueResume()">Resume</button>
+            <button class="btn btn-sm btn-outline-danger ms-1" onclick="queueCancel()">Cancel</button>
+            <button class="btn btn-sm btn-outline-secondary ms-1" onclick="queueReprint()">Reprint Last</button>
+          </h6>
           <div id="pending-queue"></div>
         </div>
       </div>
@@ -80,6 +205,8 @@
   const ws = new WebSocket(`ws://${location.host}`);
   let historyData = [];
   let selected = null;
+  let historyFilters = { type: '', text: '', date: '' };
+  let tracePage = 0, tracePageSize = 40, traceSearch = '';
 
   ws.onmessage = (ev) => {
     try {
@@ -89,6 +216,7 @@
         updateQueue(payload.queue);
         updateHistory(payload.history);
         updateTrace(payload.trace);
+        updateLCD(payload.printer, payload.queue, payload.trace);
       }
     } catch (err) { console.error(err); }
   };
@@ -114,6 +242,51 @@
     container.innerHTML = q.map(it => `<div style="padding:6px;border-bottom:1px solid #eee">${it.type} - ${it.meta && it.meta.source ? it.meta.source : ''}</div>`).join('');
   }
 
+  document.getElementById('filter-type').addEventListener('change', e => { historyFilters.type = e.target.value; updateHistory(historyData); });
+  document.getElementById('filter-text').addEventListener('input', e => { historyFilters.text = e.target.value; updateHistory(historyData); });
+  document.getElementById('filter-date').addEventListener('change', e => { historyFilters.date = e.target.value; updateHistory(historyData); });
+  document.getElementById('trace-search').addEventListener('input', e => { traceSearch = e.target.value; tracePage = 0; updateTrace(lastTraceData); });
+  function clearFilters() {
+    document.getElementById('filter-type').value = '';
+    document.getElementById('filter-text').value = '';
+    document.getElementById('filter-date').value = '';
+    historyFilters = { type: '', text: '', date: '' };
+    updateHistory(historyData);
+  }
+
+  function tracePrev() { if (tracePage > 0) { tracePage--; updateTrace(lastTraceData); } }
+  function traceNext() { if ((tracePage+1)*tracePageSize < (lastTraceData||[]).length) { tracePage++; updateTrace(lastTraceData); } }
+  function exportTrace() {
+    fetch('/api/logs?format=txt').then(r => r.text()).then(txt => {
+      const blob = new Blob([txt], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'bixolon-trace.txt';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
+    });
+  }
+
+  let lastTraceData = [];
+  function updateTrace(trace) {
+    lastTraceData = trace;
+    let filtered = trace;
+    if (traceSearch) {
+      filtered = trace.filter(r => (r.entry||'').toLowerCase().includes(traceSearch.toLowerCase()));
+    }
+    const start = tracePage * tracePageSize;
+    const end = start + tracePageSize;
+    const page = filtered.slice(start, end);
+    const container = document.getElementById('trace');
+    container.innerHTML = page.map(r => `[${new Date(r.ts).toLocaleTimeString()}] ${r.entry}`).join('<br>');
+    container.scrollTop = container.scrollHeight;
+    // Pager
+    const pager = document.getElementById('trace-pager');
+    pager.textContent = `Page ${tracePage+1} / ${Math.max(1, Math.ceil(filtered.length/tracePageSize))} (${filtered.length} events)`;
+  }
+
   function updateHistory(h) {
     historyData = h;
     const list = document.getElementById('history-list');
@@ -122,25 +295,69 @@
       list.innerHTML = '<div class="text-muted">No prints yet</div>';
       return;
     }
-    h.forEach((item, idx) => {
+    // Apply filters
+    let filtered = h.filter(item => {
+      if (historyFilters.type && item.type !== historyFilters.type) return false;
+      if (historyFilters.text) {
+        const txt = (item.raw || '') + (item.file || '') + (item.type || '');
+        if (!txt.toLowerCase().includes(historyFilters.text.toLowerCase())) return false;
+      }
+      if (historyFilters.date) {
+        const d = new Date(item.processedAt);
+        const f = d.toISOString().slice(0,10);
+        if (f !== historyFilters.date) return false;
+      }
+      return true;
+    });
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="text-muted">No prints match filters</div>';
+      return;
+    }
+    filtered.forEach((item, idx) => {
+      const origIdx = h.indexOf(item);
       const div = document.createElement('div');
       div.className = 'history-item';
+      let btns = `<button class="btn btn-sm btn-outline-primary" onclick="onView(${origIdx})">View</button>
+        <button class="btn btn-sm btn-outline-secondary ms-1" onclick="toggleCmd(${origIdx})">Cmd</button>`;
+      if (item.file) {
+        btns += ` <button class="btn btn-sm btn-outline-success ms-1" onclick="downloadImage('${item.file}')">Descargar</button>`;
+      }
       div.innerHTML = `<div><small>${new Date(item.processedAt).toLocaleString()}</small><div><b>${item.type}</b> ${item.file}</div></div>
-        <div><button class="btn btn-sm btn-outline-primary" onclick="onView(${idx})">View</button></div>`;
+        <div>${btns}</div>`;
+      // Add a hidden raw command preview
+      const raw = document.createElement('div');
+      raw.className = 'cmd-preview';
+      raw.style.display = 'none';
+      raw.style.fontFamily = 'monospace';
+      raw.style.fontSize = '12px';
+      raw.style.background = '#f8f9fa';
+      raw.style.border = '1px solid #eee';
+      raw.style.padding = '6px';
+      raw.style.margin = '4px 0 0 0';
+      let rawText = '';
+      if (item.type === 'image') {
+        rawText = '[binary image data: base64]\n' + (item.raw ? item.raw.slice(0,60) + '...' : '');
+      } else if (item.type === 'escpos') {
+        try {
+          const b = atob(item.raw);
+          rawText = b.replace(/[^\x20-\x7E\r\n]/g, '.');
+        } catch {
+          rawText = '[binary data: base64]\n' + (item.raw ? item.raw.slice(0,60) + '...' : '');
+        }
+      } else {
+        rawText = item.raw || '';
+      }
+      raw.textContent = rawText;
+      div.appendChild(raw);
       list.appendChild(div);
     });
-  }
-
-  function updateTrace(trace) {
-    const t = document.getElementById('trace');
-    t.innerHTML = trace.map(r => `[${new Date(r.ts).toLocaleTimeString()}] ${r.entry}`).join('<br>');
-    t.scrollTop = t.scrollHeight;
   }
 
   function onView(idx) {
     const item = historyData[idx];
     if (!item) return;
     selected = item;
+<<<<<<< HEAD
     showTicket(item.file);
   }
 
@@ -163,15 +380,115 @@
   // upload form
   const form = document.getElementById('uploadForm');
   form.addEventListener('submit', async (e) => {
+=======
+    const viewer = document.getElementById('viewer-area');
+    viewer.innerHTML = '';
+    if (item.type === 'image' && item.file) {
+      const img = document.createElement('img');
+      img.src = `/to_print/${item.file}`;
+      img.className = 'img-preview';
+      viewer.innerHTML = ''; // Clear previous content
+      viewer.appendChild(img);
+    } else {
+      viewer.textContent = 'No preview available for this print type.';
+    }
+    // Scroll to viewer
+    setTimeout(() => { viewer.scrollIntoView({ behavior: 'smooth' }); }, 100);
+  }
+
+  function toggleCmd(idx) {
+    const item = historyData[idx];
+    if (!item) return;
+    const div = document.getElementById('history-list').children[idx];
+    const cmdPreview = div.querySelector('.cmd-preview');
+    if (cmdPreview) {
+      const isVisible = cmdPreview.style.display === 'block';
+      cmdPreview.style.display = isVisible ? 'none' : 'block';
+    }
+  }
+
+  function downloadImage(filename) {
+    const link = document.createElement('a');
+    link.href = `/to_print/${filename}`;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function downloadLogs() {
+    const link = document.createElement('a');
+    link.href = '/logs/printer_logs.txt';
+    link.download = 'printer_logs.txt';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  // Initial dummy data load
+  setTimeout(() => {
+    const dummyHistory = [
+      { type: 'image', file: 'test1.png', processedAt: Date.now() - 100000, raw: '' },
+      { type: 'escpos', file: 'test2.txt', processedAt: Date.now() - 50000, raw: 'Some ESC/POS raw data' },
+      { type: 'tysp', file: 'test3.txt', processedAt: Date.now() - 30000, raw: 'Some TYSP raw data' },
+    ];
+    updateHistory(dummyHistory);
+    updatePrinter({ name: 'Bixolon SP300', protocol: 'USB', port: '9100', queueLength: 2, lastJobs: dummyHistory });
+    updateQueue([{ type: 'image', meta: { source: 'test1.png' } }, { type: 'escpos', meta: { source: 'test2.txt' } }]);
+    updateTrace(['Connected to printer', 'Print job started', 'Print job completed']);
+    updateLCD({ status: 'ready' }, [{}, {}], []);
+  }, 1000);
+
+  async function setError(type) {
+    let cmd = '';
+    if (type === 'PAPER_OUT') cmd = '~ERR_PAPER_OUT';
+    if (type === 'COVER_OPEN') cmd = '~ERR_COVER_OPEN';
+    if (type === 'NO_INK') cmd = '~ERR_NO_INK';
+    if (!cmd) return;
+    await fetch('/api/tcp-cmd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cmd }) });
+  }
+  async function clearErrors() {
+    await fetch('/api/tcp-cmd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cmd: '~ERR_PAPER_OK' }) });
+    await fetch('/api/tcp-cmd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cmd: '~ERR_COVER_OK' }) });
+    await fetch('/api/tcp-cmd', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cmd: '~ERR_INK_OK' }) });
+  }
+
+  async function loadPrinterConfig() {
+    const res = await fetch('/api/printer/config');
+    const cfg = await res.json();
+    document.getElementById('cfg-width').value = cfg.labelWidth;
+    document.getElementById('cfg-length').value = cfg.labelLength;
+    document.getElementById('cfg-mode').value = cfg.printMode;
+  }
+  document.getElementById('printer-config-form').addEventListener('submit', async (e) => {
+>>>>>>> 1283468 (Version 3: Dashboard improvements (drag-and-drop upload, advanced log viewer, status alerts, panel simulation, queue controls, config UI, error simulation, history filters, image download, command preview))
     e.preventDefault();
-    const f = form.elements['image'].files[0];
-    if (!f) return alert('Select an image');
-    const fd = new FormData();
-    fd.append('image', f);
-    const res = await fetch('/api/upload', { method: 'POST', body: fd });
+    const width = parseInt(document.getElementById('cfg-width').value, 10);
+    const length = parseInt(document.getElementById('cfg-length').value, 10);
+    const mode = document.getElementById('cfg-mode').value;
+    const res = await fetch('/api/printer/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ labelWidth: width, labelLength: length, printMode: mode })
+    });
     const j = await res.json();
-    if (j.ok) alert('Uploaded and queued: ' + j.file);
+    document.getElementById('cfg-status').textContent = j.ok ? 'Config updated!' : 'Error updating config';
+    setTimeout(() => { document.getElementById('cfg-status').textContent = ''; }, 2000);
   });
+  loadPrinterConfig();
+
+  async function queuePause() {
+    await fetch('/api/queue/pause', { method: 'POST' });
+  }
+  async function queueResume() {
+    await fetch('/api/queue/resume', { method: 'POST' });
+  }
+  async function queueCancel() {
+    await fetch('/api/queue/cancel', { method: 'POST' });
+  }
+  async function queueReprint() {
+    await fetch('/api/queue/reprint', { method: 'POST' });
+  }
 </script>
 </body>
 </html>

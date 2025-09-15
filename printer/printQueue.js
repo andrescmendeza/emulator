@@ -12,6 +12,9 @@ class PrintQueue {
     this.processing = false;
     this.trace = []; // live trace of incoming raw payloads (max size limited)
     this.traceMax = 500;
+    this.paused = false;
+    this.cancelRequested = false;
+    this.printDelayMs = 500; // Simulated print delay per job (ms)
   }
 
   addTrace(entry) {
@@ -45,6 +48,36 @@ class PrintQueue {
     return this.history.slice(0, 200);
   }
 
+  pause() {
+    this.paused = true;
+    this.addTrace('QUEUE PAUSED');
+  }
+
+  resume() {
+    this.paused = false;
+    this.addTrace('QUEUE RESUMED');
+    this._processNext();
+  }
+
+  cancelAll() {
+    this.cancelRequested = true;
+    this.queue = [];
+    this.addTrace('ALL JOBS CANCELLED');
+  }
+
+  reprintLast() {
+    if (this.history.length > 0) {
+      const last = this.history[0];
+      this.addJob({ ...last, createdAt: new Date() });
+      this.addTrace('REPRINT LAST JOB');
+    }
+  }
+
+  setPrintDelay(ms) {
+    this.printDelayMs = ms;
+    this.addTrace(`PRINT DELAY SET TO ${ms}ms`);
+  }
+
   async _processNext() {
     if (this.processing) return;
     if (this.queue.length === 0) return;
@@ -52,6 +85,18 @@ class PrintQueue {
     this.processing = true;
 
     while (this.queue.length > 0) {
+      if (this.paused) {
+        this.processing = false;
+        this.addTrace('QUEUE PAUSED (processing stopped)');
+        return;
+      }
+      if (this.cancelRequested) {
+        this.cancelRequested = false;
+        this.queue = [];
+        this.processing = false;
+        this.addTrace('CANCEL REQUESTED (processing stopped)');
+        return;
+      }
       const job = this.queue.shift();
       try {
         let filename = null;
@@ -77,7 +122,8 @@ class PrintQueue {
           file: filename,
           type: job.type,
           meta: job.meta || {},
-          processedAt: new Date()
+          processedAt: new Date(),
+          raw: (typeof job.data === 'string') ? job.data : (Buffer.isBuffer(job.data) ? job.data.toString('base64') : '')
         };
         this.history.unshift(record);
         // keep history bounded
@@ -87,6 +133,10 @@ class PrintQueue {
       } catch (err) {
         this.addTrace(`ERROR processing job: ${err.message}`);
         console.error('Error processing print job:', err);
+      }
+      // Simulate print speed delay
+      if (this.printDelayMs > 0) {
+        await new Promise(res => setTimeout(res, this.printDelayMs));
       }
     }
 

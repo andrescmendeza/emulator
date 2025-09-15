@@ -88,6 +88,39 @@ The dashboard shows:
 
 ---
 
+## 🕹️ Print Queue Controls (Web & TCP)
+
+You can control the print queue in real time via REST API or TCP commands:
+
+### Web API (REST)
+- Pause queue: `POST /api/queue/pause`
+- Resume queue: `POST /api/queue/resume`
+- Cancel all jobs: `POST /api/queue/cancel`
+- Reprint last job: `POST /api/queue/reprint`
+- Set print delay: `POST /api/queue/delay` with JSON `{ "ms": 1000 }`
+
+Example (pause queue):
+```bash
+curl -X POST http://localhost:8080/api/queue/pause
+```
+
+### TCP Commands
+Send these as plain text to port 9100:
+- `~PAUSE` — Pause the print queue
+- `~RESUME` — Resume the print queue
+- `~CANCEL` — Cancel all jobs
+- `~REPRINT` — Reprint the last job
+- `~DELAY=1000` — Set print delay to 1000ms per job
+
+Example (pause queue):
+```bash
+echo "~PAUSE" | nc localhost 9100
+```
+
+You will receive `ACK` or `NAK` responses for each command.
+
+---
+
 ## 📂 Example Files
 
 - `to_print/coffee_label.tysp` → Example TYSP job  

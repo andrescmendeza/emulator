@@ -8,7 +8,7 @@ function isImageFile(name) {
 
 function start(watchDir, queue) {
   if (!fs.existsSync(watchDir)) fs.mkdirSync(watchDir, { recursive: true });
-  // initial scan
+  // Initial scan
   fs.readdirSync(watchDir).forEach(fname => {
     const full = path.join(watchDir, fname);
     if (fs.statSync(full).isFile() && isImageFile(fname)) {

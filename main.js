@@ -9,6 +9,9 @@ const tcpServer = require('./server/tcpServer');
 const fsWatcher = require('./server/fsWatcher');
 const webServer = require('./server/webServer');
 
+const PrintBuffer = require('./server/printBuffer');
+const PrinterMemory = require('./server/printerMemory');
+
 const printTest = require('./print-test');
 
 const PRINTS_DIR = path.join(__dirname, 'prints');
@@ -18,6 +21,8 @@ if (!fs.existsSync(PRINTS_DIR)) fs.mkdirSync(PRINTS_DIR, { recursive: true });
 if (!fs.existsSync(TO_PRINT_DIR)) fs.mkdirSync(TO_PRINT_DIR, { recursive: true });
 
 const queue = new PrintQueue(PRINTS_DIR);
+const printBuffer = new PrintBuffer(20); // buffer size configurable
+const printerMemory = new PrinterMemory(40, 20); // graphics/fonts memory configurable
 const printerInfo = new PrinterInfo('Bixolon SP300 Emulator', 9100, 'TCP', queue);
 
 // Render ticket for Bixolon SP300 commands
@@ -86,6 +91,8 @@ if (runTest) {
   console.log(':warning: RUN_PRINT_TEST is true — running print-test at startup');
   printTest().catch(err => console.error('print-test error:', err));
 }
+
+// Pass printBuffer and printerMemory to servers as needed (future integration)
 
 console.log(':white_check_mark: Emulator started');
 console.log(' - TCP port: 9100');
