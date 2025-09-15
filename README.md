@@ -19,8 +19,6 @@ It exposes:
 ---
 
 ## 🚀 How to Build and Run
-docker build -t printer-emulator .
-docker run --name printer-emulator -e RUN_PRINT_TEST=true -p 9100:9100 -p 9200:9200 -p 8080:8080 printer-emulator
 
 ### 1. Build the Docker image
 ```bash
@@ -29,12 +27,7 @@ docker build -t printer-emulator .
 
 ### 2. Run the emulator container
 ```bash
-docker run --name printer-emulator \
-	-e RUN_PRINT_TEST=true \
-	-p 9100:9100 \
-	-p 9200:9200 \
-	-p 8080:8080 \
-	printer-emulator
+docker run --name printer-emulator -e RUN_PRINT_TEST=true -p 9100:9100 -p 9200:9200 -p 8080:8080 printer-emulator
 ```
 
 The container will automatically start the emulator and, if `RUN_PRINT_TEST=true` is set, will run the print test at startup.
