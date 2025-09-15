@@ -34,34 +34,61 @@
 All responses to proprietary commands are simulated for emulation and testing purposes.
 # Bixolon Emulator
 
-This project emulates a **Bixolon SP300 printer** with support for:
+
+This project emulates two printers:
+- **Bixolon SP300** (TCP port 9100)
+- **Epson L90** (TCP port 9200)
+
+Supported features:
 
 - **TYSP (ZPL-like)** commands
 - **ESC/POS** commands
 - **Image printing** (drop images in `/to_print/` folder inside the container)
 
 It exposes:
-- **TCP Server** on port `9100`
+- **TCP Server** on port `9100` (Bixolon SP300)
+- **TCP Server** on port `9200` (Epson L90)
 - **Web Dashboard** on port `8080`
 
 ---
 
 ## 🚀 How to Build and Run
+docker build -t printer-emulator .
+docker run --name printer-emulator -e RUN_PRINT_TEST=true -p 9100:9100 -p 9200:9200 -p 8080:8080 printer-emulator
 
+### 1. Build the Docker image
 ```bash
-# Build Docker image
-docker build -t bixolon-emulator .
-
-# Run container
-docker run --name bixolon-emulator -e RUN_PRINT_TEST=true -p 9100:9100 -p 8080:8080 bixolon-emulator
+docker build -t printer-emulator .
 ```
 
-Then visit:  
+### 2. Run the emulator container
+```bash
+docker run --name printer-emulator \
+	-e RUN_PRINT_TEST=true \
+	-p 9100:9100 \
+	-p 9200:9200 \
+	-p 8080:8080 \
+	printer-emulator
+```
+
+The container will automatically start the emulator and, if `RUN_PRINT_TEST=true` is set, will run the print test at startup.
+
+TCP ports:
+- `9100` → Bixolon SP300 emulator
+- `9200` → Epson L90 emulator
+
+You can then access the web dashboard at:
 👉 [http://localhost:8080](http://localhost:8080)
 
 ---
 
 ## 🖨️ How to Test Printing
+
+### 0. Automatic test on startup
+If the environment variable `RUN_PRINT_TEST=true` is set, the emulator will automatically execute the `emulator_test.raw` file at startup. This file is sent to both emulators:
+- Port 9100 (Bixolon SP300)
+- Port 9200 (Epson L90)
+You can modify or replace `emulator_test.raw` to customize the automatic test job.
 
 ### 1. Send TYSP Command
 ```bash
@@ -102,15 +129,26 @@ printf "\x1B\x40\x1B\x61\x01Latte - Medium\n\n\x1D\x6B\x04987654321\x00\n\n\n" |
 ```
 
 ### 3. Drop an Image
-Copy any PNG/JPG file into the `to_print/` folder inside the container:
 
+Copy any PNG/JPG file into the `to_print/` folder inside the container:
 ```bash
-docker cp my_label.png bixolon-emulator:/app/to_print/
+docker cp my_label.png printer-emulator:/app/to_print/
 ```
 
 The emulator will detect the file and add it as a print job.
 
 ---
+
+### 4. Send a .raw file
+You can send a .raw file directly to either printer emulator using netcat. For example, to send `emulator_test.raw` to the Bixolon SP300 (port 9100):
+```bash
+nc localhost 9100 < emulator_test.raw
+```
+Or to send it to the Epson L90 (port 9200):
+```bash
+nc localhost 9200 < emulator_test.raw
+```
+This allows you to test with any raw print job file.
 
 ## 📊 Dashboard
 
