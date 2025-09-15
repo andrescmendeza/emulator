@@ -83,7 +83,7 @@ async function renderTicket(commands) {
   const out = fs.createWriteStream(outPath);
   const stream = canvas.createPNGStream();
   stream.pipe(out);
-  out.on('finish', () => console.log('Ticket rendered in:', outPath));
+  out.on('finish', () => console.log('Ticket rendered at:', outPath));
 }
 
 
@@ -96,7 +96,37 @@ webServer.start(8080, queue, printerInfo);
 const runTest = process.env.RUN_PRINT_TEST === 'true' || process.env.RUN_PRINT_TEST === '1';
 if (runTest) {
   console.log(':warning: RUN_PRINT_TEST is true — running print-test at startup');
-  printTest().catch(err => console.error('print-test error:', err));
+  printTest()
+    .then(async () => {
+  // Automatic test with emulator_test.raw for both emulators
+      const net = require('net');
+      const rawPath = path.join(__dirname, 'emulator_test.raw');
+      if (fs.existsSync(rawPath)) {
+        const buffer = fs.readFileSync(rawPath);
+        // Enviar a Bixolon SP300 (9100)
+        await new Promise((resolve, reject) => {
+          const s = new net.Socket();
+          s.connect(9100, '127.0.0.1', () => {
+            s.write(buffer, () => { s.end(); resolve(); });
+          });
+          s.on('error', reject);
+        });
+  console.log('Automatic test: emulator_test.raw sent to Bixolon SP300 emulator (9100).');
+
+        // Enviar a Epson L90 (9200)
+        await new Promise((resolve, reject) => {
+          const s = new net.Socket();
+          s.connect(9200, '127.0.0.1', () => {
+            s.write(buffer, () => { s.end(); resolve(); });
+          });
+          s.on('error', reject);
+        });
+  console.log('Automatic test: emulator_test.raw sent to Epson L90 emulator (9200).');
+      } else {
+  console.warn('emulator_test.raw not found for automatic test.');
+      }
+    })
+    .catch(err => console.error('print-test error:', err));
 }
 
 // Pass printBuffer and printerMemory to servers as needed (future integration)

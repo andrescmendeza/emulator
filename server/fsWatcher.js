@@ -28,9 +28,9 @@ function start(watchDir, queue) {
         const buffer = fs.readFileSync(full);
         queue.addJob({ type: 'image', data: buffer, meta: { source: 'fswatch', ext: path.extname(filename).replace('.', '') }});
         fs.unlinkSync(full);
-        console.log('FSWatcher queued', filename);
+  console.log('FSWatcher queued', filename);
       } catch (err) {
-        console.error('FSWatcher error', err);
+  console.error('FSWatcher error', err);
       }
     }, 200);
   });

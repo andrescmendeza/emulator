@@ -1,40 +1,10 @@
 const { createCanvas, loadImage } = require('canvas');
 const QRCode = require('qrcode');
+const BWIPJS = require('bwip-js');
+const PDF417 = require('pdf417-generator');
 const fs = require('fs');
 const path = require('path');
-
-// Minimal ESC/POS stub: extract printable ASCII and render it.
-// For a full implementation, integrate escpos-buffer or escpos libraries.
-
-async function renderToImage(buffer, printsDir) {
-  const width = 576;
-  let y = 30;
-  let lineHeight = 22;
-  let fontSize = 18;
-  let fontFamily = 'monospace';
-  let bold = false;
-  let underline = false;
-  let doubleWidth = false;
-  let doubleHeight = false;
-  let align = 'left';
-  let cut = false;
-  let cashDrawer = false;
-  let lines = [];
-  let graphics = [];
-
-  // Parse ESC/POS commands
-  const bytes = Buffer.from(buffer);
-  let i = 0;
-  let currLine = '';
-  function flushLine() {
-    if (currLine.length > 0) {
-      lines.push({
-        text: currLine,
-        bold, underline, doubleWidth, doubleHeight, align, fontSize
-      });
-      currLine = '';
-    }
-  }
+// ...existing code...
   while (i < bytes.length) {
     const b = bytes[i];
     // ESC = 0x1B, GS = 0x1D, FS = 0x1C
@@ -62,18 +32,35 @@ async function renderToImage(buffer, printsDir) {
           fontSize = 18 * (doubleHeight ? 2 : 1);
           i += 3;
           break;
+        case 0x7b: // ESC { n (inverted)
+          inverted = !!bytes[i+2];
+          i += 3;
+          break;
         case 0x61: // ESC a n (align)
           align = ['left','center','right'][bytes[i+2]] || 'left';
           i += 3;
           break;
         case 0x69: // ESC i (full cut)
+          cut = true;
+          cutType = 'full';
+          i += 2;
+          break;
         case 0x6d: // ESC m (partial cut)
+          cut = true;
+          cutType = 'partial';
+          i += 2;
+          break;
         case 0x56: // ESC V (cut)
           cut = true;
-          i += 2;
+          // ESC V m: m=0 full, m=1 partial, m=66 programmable
+          if (bytes[i+2] === 0) cutType = 'full';
+          else if (bytes[i+2] === 1) cutType = 'partial';
+          else cutType = 'program';
+          i += 3;
           break;
         case 0x70: // ESC p (cash drawer)
           cashDrawer = true;
+          // Optionally, you can add more logic to simulate pulse duration, pin, etc.
           i += 4;
           break;
         default:
@@ -93,7 +80,14 @@ async function renderToImage(buffer, printsDir) {
           let data = [];
           while (j < bytes.length && bytes[j] !== 0) { data.push(bytes[j]); j++; }
           const barcodeData = Buffer.from(data).toString('ascii');
-          graphics.push({ type: 'barcode', barcodeType, data: barcodeData });
+          // barcodeType: 0-6 = 1D, 67 = PDF417, 71 = DataMatrix (ESC/POS extended)
+          if (barcodeType === 67) { // PDF417 (example custom code)
+            graphics.push({ type: 'pdf417', data: barcodeData });
+          } else if (barcodeType === 71) { // DataMatrix (example custom code)
+            graphics.push({ type: 'datamatrix', data: barcodeData });
+          } else {
+            graphics.push({ type: 'barcode', barcodeType, data: barcodeData });
+          }
           i = j+1;
           break;
         case 0x28: // GS ( k (QR code)
@@ -148,9 +142,11 @@ async function renderToImage(buffer, printsDir) {
   // Estimate height
   let estHeight = lines.length * lineHeight * 1.2 + 100;
   for (const g of graphics) {
-    if (g.type === 'barcode') estHeight += 60;
-    if (g.type === 'qr') estHeight += 120;
-    if (g.type === 'bitmap') estHeight += g.height + 10;
+  if (g.type === 'barcode') estHeight += 60;
+  if (g.type === 'qr') estHeight += 120;
+  if (g.type === 'pdf417') estHeight += 120;
+  if (g.type === 'datamatrix') estHeight += 120;
+  if (g.type === 'bitmap') estHeight += g.height + 10;
   }
   const height = Math.max(300, estHeight);
   const canvas = createCanvas(width, height);
@@ -162,9 +158,21 @@ async function renderToImage(buffer, printsDir) {
   let gIdx = 0;
   for (const ln of lines) {
     ctx.save();
-    ctx.font = `${ln.bold ? 'bold ' : ''}${ln.doubleHeight ? ln.fontSize*2 : ln.fontSize}px ${fontFamily}`;
+    ctx.font = `${ln.bold ? 'bold ' : ''}${ln.doubleHeight ? ln.fontSize*2 : ln.fontSize}px ${ln.fontFamily || fontFamily}`;
     ctx.textBaseline = 'top';
     ctx.fillStyle = '#000';
+    if (ln.inverted) {
+      // Draw background rectangle first
+      const metrics = ctx.measureText(ln.text);
+      let tx = 10;
+      if (ln.align === 'center') tx = width/2 - metrics.width/2;
+      if (ln.align === 'right') tx = width-10 - metrics.width;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(tx, y, metrics.width, ln.fontSize+6);
+      ctx.fillStyle = '#fff';
+    } else {
+      ctx.fillStyle = '#000';
+    }
     if (ln.align === 'center') {
       ctx.textAlign = 'center';
       ctx.fillText(ln.text, width/2, y);
@@ -203,13 +211,64 @@ async function renderToImage(buffer, printsDir) {
         await QRCode.toCanvas(qrCanvas, g.data, { margin: 1 });
         ctx.drawImage(qrCanvas, width/2-50, y);
         y += 110;
+      } else if (g.type === 'pdf417') {
+        // Use pdf417-generator to draw PDF417
+        const pdf417 = PDF417(g.data);
+        const rows = pdf417.rows;
+        const cols = pdf417.cols;
+        const cellSize = 2;
+        const pdfCanvas = createCanvas(cols*cellSize, rows*cellSize);
+        const pdfCtx = pdfCanvas.getContext('2d');
+        pdfCtx.fillStyle = '#fff';
+        pdfCtx.fillRect(0,0,cols*cellSize,rows*cellSize);
+        pdfCtx.fillStyle = '#000';
+        for (let r=0; r<rows; r++) {
+          for (let c=0; c<cols; c++) {
+            if (pdf417.barcodeMatrix[r][c]) {
+              pdfCtx.fillRect(c*cellSize, r*cellSize, cellSize, cellSize);
+            }
+          }
+        }
+        ctx.drawImage(pdfCanvas, width/2-cols, y);
+        y += rows*cellSize + 10;
+      } else if (g.type === 'datamatrix') {
+        // Use bwip-js to draw DataMatrix
+        try {
+          const png = await BWIPJS.toBuffer({
+            bcid: 'datamatrix',
+            text: g.data,
+            scale: 2,
+            includetext: false
+          });
+          const img = await loadImage(png);
+          ctx.drawImage(img, width/2-50, y);
+          y += 110;
+        } catch (err) {
+          ctx.font = '12px monospace';
+          ctx.fillStyle = '#f00';
+          ctx.fillText('DataMatrix error', width/2-50, y);
+          y += 20;
+        }
       } else if (g.type === 'bitmap') {
-        // Draw raster bit image
+        // Improved raster bit image rendering: grayscale & antialiasing effect
         const img = ctx.createImageData(g.width, g.height);
         for (let yy=0; yy<g.height; ++yy) {
           for (let xx=0; xx<g.width; ++xx) {
             const idx = (yy*g.width+xx)*4;
-            const v = g.data[yy][xx] ? 0 : 255;
+            // Simulate grayscale dithering for more realistic output
+            let v = g.data[yy][xx] ? 0 : 255;
+            // Simple antialiasing: average with neighbors if possible
+            if (yy > 0 && xx > 0 && yy < g.height-1 && xx < g.width-1) {
+              let sum = 0;
+              let count = 0;
+              for (let dy=-1; dy<=1; dy++) {
+                for (let dx=-1; dx<=1; dx++) {
+                  sum += g.data[yy+dy][xx+dx] ? 0 : 255;
+                  count++;
+                }
+              }
+              v = Math.round(sum/count);
+            }
             img.data[idx] = img.data[idx+1] = img.data[idx+2] = v;
             img.data[idx+3] = 255;
           }
@@ -223,21 +282,43 @@ async function renderToImage(buffer, printsDir) {
 
   // Draw cut/cash drawer indicators
   if (cut) {
-    ctx.strokeStyle = '#f00';
+    ctx.strokeStyle = '#000';
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.moveTo(0, y+10);
-    ctx.lineTo(width, y+10);
+    if (cutType === 'partial') {
+      // Dashed line for partial cut
+      const dash = 10, gap = 10;
+      let x = 0;
+      while (x < width) {
+        ctx.moveTo(x, y+10);
+        ctx.lineTo(Math.min(x+dash, width), y+10);
+        x += dash + gap;
+      }
+      ctx.setLineDash([dash, gap]);
+    } else {
+      // Solid line for full cut or default
+      ctx.setLineDash([]);
+      ctx.moveTo(0, y+10);
+      ctx.lineTo(width, y+10);
+    }
     ctx.stroke();
+    ctx.setLineDash([]);
     ctx.font = 'bold 16px monospace';
-    ctx.fillStyle = '#f00';
-    ctx.fillText('PAPER CUT', width/2-50, y+18);
+    ctx.fillStyle = '#000';
+    if (cutType === 'partial') {
+      ctx.fillText('PARTIAL CUT', width/2-60, y+18);
+    } else if (cutType === 'full') {
+      ctx.fillText('FULL CUT', width/2-50, y+18);
+    } else {
+      ctx.fillText('CUT', width/2-20, y+18);
+    }
     y += 40;
   }
   if (cashDrawer) {
     ctx.font = 'bold 16px monospace';
     ctx.fillStyle = '#080';
     ctx.fillText('CASH DRAWER OPEN', width/2-80, y+10);
+    // Optionally, draw a simple icon or animation here
     y += 30;
   }
 
@@ -245,6 +326,6 @@ async function renderToImage(buffer, printsDir) {
   const filename = `escpos-${Date.now()}.png`;
   fs.writeFileSync(path.join(printsDir, filename), canvas.toBuffer('image/png'));
   return filename;
-}
 
+module.exports = { renderToImage };
 module.exports = { renderToImage };

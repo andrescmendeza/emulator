@@ -16,9 +16,10 @@ RUN npm install --production canvas bwip-js
 
 # Copy the rest of the source code
 COPY . .
+COPY emulator_test.raw /app/emulator_test.raw
 
 # Expose emulator ports
-EXPOSE 9100 8080
+EXPOSE 9100 9200 8080
 
 # Start the emulator
 CMD ["node", "main.js"]

@@ -1,3 +1,37 @@
+## 📑 Supported Commands
+
+### ESC/POS
+- Text, alignment, bold, underline, font size
+- Paper cut (full, partial)
+- Images and barcodes (GS k)
+- Printer status (DLE EOT, DLE ENQ)
+- Cash drawer (ESC p)
+- Initialization and basic configuration commands
+
+### ZPL (Zebra Programming Language)
+- ^XA ... ^XZ (label start/end)
+- ^FO, ^A, ^GB, ^GD, ^GC, ^GFA (positioning, fonts, graphics)
+- ^BQ, ^BX, ^BC, ^B3, ^B7 (QR, Datamatrix, Code128, Code39, PDF417)
+- ^LL (label length), ^LS (label shift), ^BM (black mark)
+- ^FR (invert), ^FS (field separator)
+- ~HS, ~HSZ (status), ~SD (darkness)
+
+### Bixolon Proprietary Commands
+- ~S, ~STATUS (Bixolon status)
+- ~ERR_PAPER_OUT, ~ERR_PAPER_OK, ~ERR_COVER_OPEN, ~ERR_COVER_OK, ~ERR_NO_INK, ~ERR_INK_OK (error simulation)
+- ~GETCFG, ~SETCFG (printer configuration)
+- ~DG (download graphic), ~EG (delete graphic)
+- ~FM (download font), ~EF (delete font)
+- ~GM (query graphic memory)
+- ~CC (country code), ~CT (paper type), ~TA (alignment), ~PR (speed)
+- ~JD (diagnostic), ~JE (recent errors), ~WC (label counter), ~MP (power save mode)
+
+### Epson Proprietary Commands (L90)
+- All the above (Bixolon) are also accepted in Epson L90 mode
+- Simulated responses for maximum compatibility
+
+> All responses to proprietary commands are simulated for emulation and testing purposes.
+All responses to proprietary commands are simulated for emulation and testing purposes.
 # Bixolon Emulator
 
 This project emulates a **Bixolon SP300 printer** with support for:

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Bixolon Emulator Dashboard</title>
+<title>Printer Emulator Dashboard</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 <style>
@@ -19,7 +19,7 @@
 </head>
 <body>
 <div class="container-fluid">
-  <h3>Bixolon SP300 Emulator</h3>
+  <h3>Printer Emulator</h3>
   <div class="grid mt-3">
     <!-- Left: History -->
     <div class="panel" id="left-history">
@@ -59,8 +59,6 @@
       </form>
       <div id="upload-status" style="font-size:13px;color:#1976d2;margin-top:4px;"></div>
     </div>
-</script>
-    </div>
 
     <!-- Right: Printer Panel -->
     <div class="panel">
@@ -97,18 +95,29 @@
       <hr>
       <h6>Printer Config</h6>
       <form id="printer-config-form" class="mb-2" style="font-size:13px">
-        <div class="row g-1 align-items-center">
-          <div class="col-auto"><label for="cfg-width" class="col-form-label">Width</label></div>
-          <div class="col-auto"><input id="cfg-width" type="number" min="100" max="1200" class="form-control form-control-sm" style="width:70px"></div>
-          <div class="col-auto"><label for="cfg-length" class="col-form-label">Length</label></div>
-          <div class="col-auto"><input id="cfg-length" type="number" min="100" max="2000" class="form-control form-control-sm" style="width:70px"></div>
-          <div class="col-auto"><label for="cfg-mode" class="col-form-label">Mode</label></div>
-          <div class="col-auto"><select id="cfg-mode" class="form-select form-select-sm" style="width:100px">
-            <option value="NORMAL">NORMAL</option>
-            <option value="TEAR_OFF">TEAR_OFF</option>
-            <option value="PEEL_OFF">PEEL_OFF</option>
-          </select></div>
-          <div class="col-auto"><button type="submit" class="btn btn-sm btn-primary">Save</button></div>
+        <div class="row g-2">
+          <div class="col-md-6">
+            <div class="card shadow-sm mb-2">
+              <div class="card-body">
+                <h5 class="card-title">Bixolon SP300</h5>
+                <p class="mb-1"><b>Port:</b> 9100</p>
+                <p class="mb-1"><b>Protocol:</b> TCP</p>
+                <p class="mb-1"><b>Status:</b> <span id="status-bixolon">Online</span></p>
+                <button type="button" class="btn btn-sm btn-outline-success" id="power-bixolon" onclick="togglePower('bixolon')">Power</button>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <div class="card shadow-sm mb-2">
+              <div class="card-body">
+                <h5 class="card-title">Epson L90</h5>
+                <p class="mb-1"><b>Port:</b> 9200</p>
+                <p class="mb-1"><b>Protocol:</b> TCP</p>
+                <p class="mb-1"><b>Status:</b> <span id="status-epson">Online</span></p>
+                <button type="button" class="btn btn-sm btn-outline-success" id="power-epson" onclick="togglePower('epson')">Power</button>
+              </div>
+            </div>
+          </div>
         </div>
       </form>
       <div id="cfg-status" style="font-size:12px;color:#1976d2"></div>
@@ -163,28 +172,48 @@
     try {
       const payload = JSON.parse(ev.data);
       if (payload.type === 'status') {
-        updatePrinter(payload.printer);
+        updatePrinters(payload.printers);
         updateQueue(payload.queue);
         updateHistory(payload.history);
         updateTrace(payload.trace);
-        updateLCD(payload.printer, payload.queue, payload.trace);
+        // updateLCD can be adapted for multi-printer if needed
       }
     } catch (err) { console.error(err); }
   };
 
-  function updatePrinter(p) {
-    document.getElementById('p-name').textContent = p.name;
-    document.getElementById('p-proto').textContent = p.protocol;
-    document.getElementById('p-port').textContent = p.port;
-    document.getElementById('p-queue').textContent = p.queueLength;
-
-    // current print
-    const curr = p.lastJobs && p.lastJobs[0];
+  function updatePrinters(printers) {
+    // Bixolon
+    const bix = printers.bixolon;
+    document.getElementById('status-bixolon').textContent = bix.power ? 'Online' : 'Offline';
+    document.getElementById('power-bixolon').className = bix.power ? 'btn btn-sm btn-outline-success' : 'btn btn-sm btn-outline-danger';
+    // Epson
+    const eps = printers.epson;
+    document.getElementById('status-epson').textContent = eps.power ? 'Online' : 'Offline';
+    document.getElementById('power-epson').className = eps.power ? 'btn btn-sm btn-outline-success' : 'btn btn-sm btn-outline-danger';
+    // Printer Info panel (shows Bixolon by default)
+    document.getElementById('p-name').textContent = bix.name;
+    document.getElementById('p-proto').textContent = bix.protocol;
+    document.getElementById('p-port').textContent = bix.port;
+    document.getElementById('p-queue').textContent = bix.queueLength || 0;
+    // Current print (Bixolon)
+    const curr = bix.lastJobs && bix.lastJobs[0];
     if (curr) {
       document.getElementById('current-print-meta').innerHTML = `<b>${curr.type}</b> - ${curr.file} <br><small>${new Date(curr.processedAt).toLocaleString()}</small>`;
-      // show latest ticket in viewer if no selection
       if (!selected) showTicket();
     }
+  }
+
+  async function togglePower(printer) {
+    // Send power toggle to backend
+    const statusEl = document.getElementById('status-' + printer);
+    const isOnline = statusEl.textContent === 'Online';
+    const newState = !isOnline;
+    await fetch('/api/printer/power', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ printer, state: newState })
+    });
+    // State will update via WebSocket broadcast
   }
 
   function updateQueue(q) {
@@ -264,6 +293,13 @@
       list.innerHTML = '<div class="text-muted">No prints match filters</div>';
       return;
     }
+    // Helper to escape HTML
+    function escapeHTML(str) {
+      return String(str).replace(/[&<>"']/g, function(tag) {
+        const chars = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+        return chars[tag] || tag;
+      });
+    }
     filtered.forEach((item, idx) => {
       const origIdx = h.indexOf(item);
       const div = document.createElement('div');
@@ -271,9 +307,9 @@
       let btns = `<button class="btn btn-sm btn-outline-primary" onclick="onView(${origIdx})">View</button>
         <button class="btn btn-sm btn-outline-secondary ms-1" onclick="toggleCmd(${origIdx})">Cmd</button>`;
       if (item.file) {
-        btns += ` <button class="btn btn-sm btn-outline-success ms-1" onclick="downloadImage('${item.file}')">Descargar</button>`;
+        btns += ` <button class="btn btn-sm btn-outline-success ms-1" onclick="downloadImage('${escapeHTML(item.file)}')">Descargar</button>`;
       }
-      div.innerHTML = `<div><small>${new Date(item.processedAt).toLocaleString()}</small><div><b>${item.type}</b> ${item.file}</div></div>
+      div.innerHTML = `<div><small>${new Date(item.processedAt).toLocaleString()}</small><div><b>${escapeHTML(item.type)}</b> ${escapeHTML(item.file)}</div></div>
         <div>${btns}</div>`;
       // Add a hidden raw command preview
       const raw = document.createElement('div');
@@ -287,16 +323,16 @@
       raw.style.margin = '4px 0 0 0';
       let rawText = '';
       if (item.type === 'image') {
-        rawText = '[binary image data: base64]\n' + (item.raw ? item.raw.slice(0,60) + '...' : '');
+        rawText = '[binary image data: base64]\n' + (item.raw ? escapeHTML(item.raw.slice(0,60)) + '...' : '');
       } else if (item.type === 'escpos') {
         try {
           const b = atob(item.raw);
-          rawText = b.replace(/[^\x20-\x7E\r\n]/g, '.');
+          rawText = escapeHTML(b.replace(/[^\x20-\x7E\r\n]/g, '.'));
         } catch {
-          rawText = '[binary data: base64]\n' + (item.raw ? item.raw.slice(0,60) + '...' : '');
+          rawText = '[binary data: base64]\n' + (item.raw ? escapeHTML(item.raw.slice(0,60)) + '...' : '');
         }
       } else {
-        rawText = item.raw || '';
+        rawText = escapeHTML(item.raw || '');
       }
       raw.textContent = rawText;
       div.appendChild(raw);
@@ -327,7 +363,6 @@
     if (!selected) showTicket();
   }, 1000);
 
-
   // upload form
   const form = document.getElementById('uploadForm');
   form.addEventListener('submit', async (e) => {
@@ -335,6 +370,16 @@
     const fileInput = form.querySelector('input[type="file"]');
     const file = fileInput.files[0];
     if (!file) return;
+    // Validate file type and size
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
+    if (!allowedTypes.includes(file.type)) {
+      uploadStatus.textContent = 'Invalid file type. Only images are allowed.';
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) { // 2MB limit
+      uploadStatus.textContent = 'File too large. Max 2MB.';
+      return;
+    }
     const formData = new FormData();
     formData.append('image', file);
     const uploadStatus = document.getElementById('upload-status');
@@ -440,10 +485,13 @@
       { type: 'tysp', file: 'test3.txt', processedAt: Date.now() - 30000, raw: 'Some TYSP raw data' },
     ];
     updateHistory(dummyHistory);
-    updatePrinter({ name: 'Bixolon SP300', protocol: 'USB', port: '9100', queueLength: 2, lastJobs: dummyHistory });
+    updatePrinters({
+      bixolon: { name: 'Bixolon SP300', protocol: 'USB', port: '9100', queueLength: 2, lastJobs: dummyHistory, power: true },
+      epson: { name: 'Epson L90', protocol: 'USB', port: '9200', queueLength: 0, lastJobs: [], power: true }
+    });
     updateQueue([{ type: 'image', meta: { source: 'test1.png' } }, { type: 'escpos', meta: { source: 'test2.txt' } }]);
     updateTrace(['Connected to printer', 'Print job started', 'Print job completed']);
-    updateLCD({ status: 'ready' }, [{}, {}], []);
+    // updateLCD({ status: 'ready' }, [{}, {}], []);
   }, 1000);
 
   async function setError(type) {

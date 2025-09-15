@@ -70,7 +70,7 @@ async function renderTicket(commands, width = 576, height = 800) {
         const img = await loadImage(png);
         ctx.drawImage(img, x, y);
       } catch (err) {
-        console.error("Error generating barcode:", err);
+  console.error("Error generating barcode:", err);
       }
       continue;
     }
@@ -91,7 +91,7 @@ async function renderTicket(commands, width = 576, height = 800) {
         const img = await loadImage(png);
         ctx.drawImage(img, x, y);
       } catch (err) {
-        console.error("Error generating QR:", err);
+  console.error("Error generating QR:", err);
       }
       continue;
     }
@@ -156,7 +156,7 @@ async function renderTicket(commands, width = 576, height = 800) {
         tmpCtx.putImageData(imageData, 0, 0);
         ctx.drawImage(tmpCanvas, x, y);
       } catch (err) {
-        console.error("Error loading image:", err);
+  console.error("Error loading image:", err);
       }
       continue;
     }

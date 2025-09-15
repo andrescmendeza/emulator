@@ -132,7 +132,7 @@ class PrintQueue {
         this.addTrace(`COMPLETED ${job.type} -> ${filename}`);
       } catch (err) {
         this.addTrace(`ERROR processing job: ${err.message}`);
-        console.error('Error processing print job:', err);
+  console.error('Error processing print job:', err);
       }
       // Simulate print speed delay
       if (this.printDelayMs > 0) {

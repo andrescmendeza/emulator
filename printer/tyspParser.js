@@ -29,12 +29,41 @@ async function renderToImage(tyspText, printsDir) {
   let fieldParams = {};
   const drawQueue = [];
   const errors = [];
+  // --- Linerless/black mark simulation state ---
+  let labelLength = 800; // Default label length in dots
+  let labelShift = 0;    // ^LS (Label Shift)
+  let blackMark = false; // ^BM (Black Mark)
+  let markType = null;   // BM type (e.g., 'Y', 'N', 'B', etc.)
+  let markPos = null;    // Position of black mark (for visualization)
 
   // Preprocess: remove \r and split by ^
   const tokens = String(tyspText).replace(/\r/g, '').split('^').filter(Boolean);
   for (let t of tokens) {
     t = t.trim();
     if (!t) continue;
+    // --- Linerless/black mark/label length commands ---
+    if (/^LL\d+/.test(t)) {
+      // ^LLnnn: Label Length
+      const m = t.match(/^LL(\d+)/);
+      if (m) labelLength = parseInt(m[1], 10);
+      continue;
+    }
+    if (/^LS\d+/.test(t)) {
+      // ^LSnnn: Label Shift
+      const m = t.match(/^LS(\d+)/);
+      if (m) labelShift = parseInt(m[1], 10);
+      continue;
+    }
+    if (/^BM.*/.test(t)) {
+      // ^BMx: Black Mark mode
+      // Example: ^BMY (use black mark sensor), ^BMN (no mark), ^BMB (backfeed to mark)
+      const m = t.match(/^BM([A-Z])/i);
+      if (m) {
+        blackMark = m[1].toUpperCase() !== 'N';
+        markType = m[1].toUpperCase();
+      }
+      continue;
+    }
     // Graphics: ^GB (box), ^GD (diagonal line), ^GC (circle)
     if (/^GB.*/.test(t)) {
       const m = t.match(/^GB(\d+),(\d+),(\d+),([BW]),?(\d+)?/);
@@ -42,7 +71,7 @@ async function renderToImage(tyspText, printsDir) {
         const [_, w, h, thick, color, radius] = m;
         drawQueue.push({ type: 'BOX', x: curX, y: curY, w: parseInt(w), h: parseInt(h), t: parseInt(thick), color, r: parseInt(radius || '0') });
       } else {
-        errors.push('Error: Malformed GB: ' + t);
+  errors.push('Error: Malformed GB: ' + t);
       }
       continue;
     } else if (/^GD.*/.test(t)) {
@@ -51,7 +80,7 @@ async function renderToImage(tyspText, printsDir) {
         const [_, w, h, thick, color] = m;
         drawQueue.push({ type: 'LINE', x: curX, y: curY, w: parseInt(w), h: parseInt(h), t: parseInt(thick), color });
       } else {
-        errors.push('Error: Malformed GD: ' + t);
+  errors.push('Error: Malformed GD: ' + t);
       }
       continue;
     } else if (/^GC.*/.test(t)) {
@@ -60,7 +89,7 @@ async function renderToImage(tyspText, printsDir) {
         const [_, d, thick, color] = m;
         drawQueue.push({ type: 'CIRCLE', x: curX, y: curY, r: parseInt(d) / 2, t: parseInt(thick), color });
       } else {
-        errors.push('Error: Malformed GC: ' + t);
+  errors.push('Error: Malformed GC: ' + t);
       }
       continue;
     }
@@ -82,10 +111,10 @@ async function renderToImage(tyspText, printsDir) {
   for (let t of tokens) {
     t = t.trim();
     if (!t) continue;
-  // Label start/end
-  if (t.startsWith('XA')) { labelOpen = true; continue; }
-  if (t.startsWith('XZ')) { labelOpen = false; continue; }
-  if (!labelOpen) continue;
+    // Label start/end
+    if (t.startsWith('XA')) { labelOpen = true; continue; }
+    if (t.startsWith('XZ')) { labelOpen = false; continue; }
+    if (!labelOpen) continue;
 
       // Positioning
       if (/^FO\d+,\d+/.test(t)) {
@@ -119,7 +148,7 @@ async function renderToImage(tyspText, printsDir) {
   if (/^B3.*/.test(t)) { // Code 39
     // Example: ^B3N,Y,N,N
     // Not implemented: warn only
-    errors.push('Warning: ^B3 (Code 39) not implemented: ' + t);
+  errors.push('Warning: ^B3 (Code 39) not implemented: ' + t);
     continue;
   }
   if (/^B7.*/.test(t)) { // PDF417
@@ -131,7 +160,7 @@ async function renderToImage(tyspText, printsDir) {
     // Barcode field default (width, ratio, height)
     // Example: ^BY3,2,100
     // Not implemented: warn only
-    errors.push('Warning: ^BY not implemented: ' + t);
+  errors.push('Warning: ^BY not implemented: ' + t);
     continue;
   }
   if (/^BQ.*/.test(t)) {
@@ -179,8 +208,8 @@ async function renderToImage(tyspText, printsDir) {
     // Inversion
     if (/^FR/.test(t)) {
       // Not implemented: warning only
-      errors.push('Warning: FR not implemented: ' + t);
-      console.warn('TYSP: FR not implemented:', t);
+  errors.push('Warning: FR not implemented: ' + t);
+  console.warn('TYSP: FR not implemented:', t);
       continue;
     }
     // Graphic bitmap (^GFA)
@@ -193,8 +222,8 @@ async function renderToImage(tyspText, printsDir) {
       // data: ASCII hex or compressed
       const m = t.match(/^GFA,([^,]+),([^,]+),([^,]+),([^,]+),(.+)/);
       if (!m) {
-        errors.push('Error: Malformed GFA: ' + t);
-        console.warn('TYSP: Malformed GFA:', t);
+  errors.push('Error: Malformed GFA: ' + t);
+  console.warn('TYSP: Malformed GFA:', t);
   return;
       }
       const [_, p1, p2, p3, p4, data] = m;
@@ -205,8 +234,8 @@ async function renderToImage(tyspText, printsDir) {
       let hex = data.replace(/\s+/g, '');
       // If compressed (starts with :), decompress (not implemented here)
       if (hex.startsWith(':')) {
-        errors.push('Warning: ^GFA compression not supported yet.');
-        console.warn('TYSP: ^GFA compression not supported:', t);
+  errors.push('Warning: ^GFA compression not supported yet.');
+  console.warn('TYSP: ^GFA compression not supported:', t);
         continue;
       }
       // Convert hex to binary
@@ -226,8 +255,8 @@ async function renderToImage(tyspText, printsDir) {
   return;
     }
     // Other commands
-    errors.push('Unrecognized command: ^' + t);
-    console.warn('TYSP: Unrecognized command:', t);
+  errors.push('Unrecognized command: ^' + t);
+  console.warn('TYSP: Unrecognized command:', t);
   }
 
   // Fallback: legacy parser (brackets)
@@ -267,14 +296,39 @@ async function renderToImage(tyspText, printsDir) {
     }
 
   // --- Rendering ---
-  let estimatedHeight = Math.max(400, drawQueue.length * (font.size + 10) + 120 + errors.length * 24);
+  // --- Estimate height based on label length and content ---
+  let estimatedHeight = Math.max(labelLength + 60, drawQueue.length * (font.size + 10) + 120 + errors.length * 24);
   const canvas = createCanvas(width, estimatedHeight);
   const ctx = canvas.getContext('2d');
   ctx.fillStyle = '#fff';
   ctx.fillRect(0, 0, width, estimatedHeight);
   ctx.fillStyle = '#000';
 
-  let yPos = 30;
+  // --- Draw label boundary (linerless/black mark simulation) ---
+  ctx.save();
+  ctx.strokeStyle = blackMark ? '#00f' : '#0a0';
+  ctx.lineWidth = 3;
+  // Draw label area (simulate linerless/mark)
+  ctx.strokeRect(0, 20 + labelShift, width, labelLength);
+  if (blackMark) {
+    // Draw black mark at bottom of label (simulate mark sensor)
+    markPos = 20 + labelShift + labelLength - 10;
+    ctx.fillStyle = '#222';
+    ctx.fillRect(0, markPos, width, 8);
+    ctx.fillStyle = '#000';
+    // Optionally, label the mark
+    ctx.font = 'bold 12px monospace';
+    ctx.fillText('BLACK MARK', 10, markPos - 2);
+  } else {
+    // Optionally, label linerless
+    ctx.font = 'bold 12px monospace';
+    ctx.fillStyle = '#090';
+    ctx.fillText('LINERLESS', 10, 20 + labelShift + labelLength - 2);
+    ctx.fillStyle = '#000';
+  }
+  ctx.restore();
+
+  let yPos = 30 + labelShift;
   for (const ln of drawQueue) {
     if (ln.type === 'BOX') {
       ctx.lineWidth = ln.t || 2;

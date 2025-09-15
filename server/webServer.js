@@ -17,7 +17,12 @@ function start(port, queue, printerInfo) {
   // JSON endpoints
   app.get('/api/queue', (req, res) => res.json(queue.getQueue()));
   app.get('/api/history', (req, res) => res.json(queue.getHistory()));
-  app.get('/api/printer', (req, res) => res.json(printerInfo.getInfo()));
+    app.get('/api/printer', (req, res) => res.json(printerInfo.getInfo()));
+    app.post('/api/printer/power', express.json(), (req, res) => {
+      const { printer, state } = req.body;
+      printerInfo.setPower(printer, state);
+      res.json({ ok: true, power: printerInfo.getPower(printer) });
+    });
   app.get('/api/trace', (req, res) => res.json(queue.getTrace()));
 
   // --- Printer config endpoints ---
@@ -53,13 +58,13 @@ function start(port, queue, printerInfo) {
 
   // Periodic broadcast of status + queue + history + trace
   setInterval(() => {
-    broadcast({
-      type: 'status',
-      printer: printerInfo.getInfo(),
-      queue: queue.getQueue(),
-      history: queue.getHistory().slice(0, 30),
-      trace: queue.getTrace().slice(0, 100)
-    });
+      broadcast({
+        type: 'status',
+        printers: printerInfo.getInfo(),
+        queue: queue.getQueue(),
+        history: queue.getHistory().slice(0, 30),
+        trace: queue.getTrace().slice(0, 100)
+      });
   }, 800);
 
   // --- Print queue controls ---
