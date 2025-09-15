@@ -45,7 +45,6 @@
       <div class="viewer" id="viewer-area">
         <span class="text-muted">No print selected</span>
       </div>
-
       <hr>
       <h6>Upload image or TYSP/ESC/POS file to /to_print (will trigger print)</h6>
       <div id="drop-area" class="upload-box mb-2" tabindex="0">
@@ -59,55 +58,7 @@
         </div>
       </form>
       <div id="upload-status" style="font-size:13px;color:#1976d2;margin-top:4px;"></div>
-</script>
-<script>
-// Drag-and-drop upload logic
-const dropArea = document.getElementById('drop-area');
-const dropInput = document.getElementById('drop-file-input');
-const uploadStatus = document.getElementById('upload-status');
-if (dropArea && dropInput) {
-  ['dragenter','dragover'].forEach(ev => dropArea.addEventListener(ev, e => {
-    e.preventDefault(); e.stopPropagation();
-    dropArea.style.background = '#e3f2fd';
-    dropArea.style.borderColor = '#1976d2';
-  }));
-  ['dragleave','drop'].forEach(ev => dropArea.addEventListener(ev, e => {
-    e.preventDefault(); e.stopPropagation();
-    dropArea.style.background = '';
-    dropArea.style.borderColor = '';
-  }));
-  dropArea.addEventListener('drop', e => {
-    const files = e.dataTransfer.files;
-    if (files && files.length) handleFiles(files);
-  });
-  dropArea.addEventListener('click', () => dropInput.click());
-  dropInput.addEventListener('change', e => {
-    if (dropInput.files && dropInput.files.length) handleFiles(dropInput.files);
-  });
-}
-
-function handleFiles(files) {
-  uploadStatus.textContent = '';
-  Array.from(files).forEach(file => {
-    const formData = new FormData();
-    formData.append('image', file); // backend expects 'image' for all
-    uploadStatus.textContent = `Uploading ${file.name}...`;
-    fetch('/api/upload', {
-      method: 'POST',
-      body: formData
-    }).then(async r => {
-      if (r.ok) {
-        uploadStatus.textContent = `Uploaded ${file.name}!`;
-        setTimeout(() => { uploadStatus.textContent = ''; }, 2000);
-      } else {
-        const err = await r.text();
-        uploadStatus.textContent = `Error uploading ${file.name}: ${err}`;
-      }
-    }).catch(err => {
-      uploadStatus.textContent = `Error uploading ${file.name}: ${err}`;
-    });
-  });
-}
+    </div>
 </script>
     </div>
 
@@ -357,7 +308,6 @@ function handleFiles(files) {
     const item = historyData[idx];
     if (!item) return;
     selected = item;
-<<<<<<< HEAD
     showTicket(item.file);
   }
 
@@ -377,23 +327,80 @@ function handleFiles(files) {
     if (!selected) showTicket();
   }, 1000);
 
+
   // upload form
   const form = document.getElementById('uploadForm');
   form.addEventListener('submit', async (e) => {
-=======
-    const viewer = document.getElementById('viewer-area');
-    viewer.innerHTML = '';
-    if (item.type === 'image' && item.file) {
-      const img = document.createElement('img');
-      img.src = `/to_print/${item.file}`;
-      img.className = 'img-preview';
-      viewer.innerHTML = ''; // Clear previous content
-      viewer.appendChild(img);
-    } else {
-      viewer.textContent = 'No preview available for this print type.';
-    }
-    // Scroll to viewer
-    setTimeout(() => { viewer.scrollIntoView({ behavior: 'smooth' }); }, 100);
+    e.preventDefault();
+    const fileInput = form.querySelector('input[type="file"]');
+    const file = fileInput.files[0];
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('image', file);
+    const uploadStatus = document.getElementById('upload-status');
+    uploadStatus.textContent = `Uploading ${file.name}...`;
+    fetch('/api/upload', {
+      method: 'POST',
+      body: formData
+    }).then(async r => {
+      if (r.ok) {
+        uploadStatus.textContent = `Uploaded ${file.name}!`;
+        setTimeout(() => { uploadStatus.textContent = ''; }, 2000);
+      } else {
+        const err = await r.text();
+        uploadStatus.textContent = `Error uploading ${file.name}: ${err}`;
+      }
+    }).catch(err => {
+      uploadStatus.textContent = `Error uploading ${file.name}: ${err}`;
+    });
+  });
+
+  // Drag-and-drop upload logic
+  const dropArea = document.getElementById('drop-area');
+  const dropInput = document.getElementById('drop-file-input');
+  const uploadStatus = document.getElementById('upload-status');
+  if (dropArea && dropInput) {
+    ['dragenter','dragover'].forEach(ev => dropArea.addEventListener(ev, e => {
+      e.preventDefault(); e.stopPropagation();
+      dropArea.style.background = '#e3f2fd';
+      dropArea.style.borderColor = '#1976d2';
+    }));
+    ['dragleave','drop'].forEach(ev => dropArea.addEventListener(ev, e => {
+      e.preventDefault(); e.stopPropagation();
+      dropArea.style.background = '';
+      dropArea.style.borderColor = '';
+    }));
+    dropArea.addEventListener('drop', e => {
+      const files = e.dataTransfer.files;
+      if (files && files.length) handleFiles(files);
+    });
+    dropArea.addEventListener('click', () => dropInput.click());
+    dropInput.addEventListener('change', e => {
+      if (dropInput.files && dropInput.files.length) handleFiles(dropInput.files);
+    });
+  }
+
+  function handleFiles(files) {
+    uploadStatus.textContent = '';
+    Array.from(files).forEach(file => {
+      const formData = new FormData();
+      formData.append('image', file); // backend expects 'image' for all
+      uploadStatus.textContent = `Uploading ${file.name}...`;
+      fetch('/api/upload', {
+        method: 'POST',
+        body: formData
+      }).then(async r => {
+        if (r.ok) {
+          uploadStatus.textContent = `Uploaded ${file.name}!`;
+          setTimeout(() => { uploadStatus.textContent = ''; }, 2000);
+        } else {
+          const err = await r.text();
+          uploadStatus.textContent = `Error uploading ${file.name}: ${err}`;
+        }
+      }).catch(err => {
+        uploadStatus.textContent = `Error uploading ${file.name}: ${err}`;
+      });
+    });
   }
 
   function toggleCmd(idx) {
@@ -461,7 +468,6 @@ function handleFiles(files) {
     document.getElementById('cfg-mode').value = cfg.printMode;
   }
   document.getElementById('printer-config-form').addEventListener('submit', async (e) => {
->>>>>>> 1283468 (Version 3: Dashboard improvements (drag-and-drop upload, advanced log viewer, status alerts, panel simulation, queue controls, config UI, error simulation, history filters, image download, command preview))
     e.preventDefault();
     const width = parseInt(document.getElementById('cfg-width').value, 10);
     const length = parseInt(document.getElementById('cfg-length').value, 10);

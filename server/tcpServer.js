@@ -1,7 +1,3 @@
-<<<<<<< HEAD
-=======
-// server/tcpServer.js
->>>>>>> 1283468 (Version 3: Dashboard improvements (drag-and-drop upload, advanced log viewer, status alerts, panel simulation, queue controls, config UI, error simulation, history filters, image download, command preview))
 const net = require('net');
 const PrintBuffer = require('./printBuffer');
 const PrinterMemory = require('./printerMemory');
@@ -23,14 +19,6 @@ function start(port, queue, printerInfo, renderTicket) {
 
     socket.on('data', (chunk) => {
       chunks.push(chunk);
-<<<<<<< HEAD
-    });
-
-    socket.on('end', async () => {
-      const buffer = Buffer.concat(chunks);
-
-      // detect image protocol
-=======
       // Don't decide until 'end' to allow binary streams
     });
 
@@ -51,7 +39,7 @@ function start(port, queue, printerInfo, renderTicket) {
       return Buffer.from([b1, 0x00, 0x00, 0x00]);
     }
 
-    socket.on('end', () => {
+    socket.on('end', async () => {
       const buffer = Buffer.concat(chunks);
       // --- Error state toggling for testing ---
       const cmd = buffer.toString('utf8').trim();
@@ -81,8 +69,29 @@ function start(port, queue, printerInfo, renderTicket) {
         socket.end();
         return;
       }
+      // --- Printer config via TCP ---
+      if (cmd === '~GETCFG') {
+        socket.write(JSON.stringify(printerInfo.getConfig()));
+        socket.end();
+        return;
+      }
+      if (cmd.startsWith('~SETCFG:')) {
+        // Format: ~SETCFG:labelWidth=600,labelLength=900,printMode=TEAR_OFF
+        const kvs = cmd.replace('~SETCFG:', '').split(',');
+        const opts = {};
+        kvs.forEach(kv => {
+          const [k, v] = kv.split('=');
+          if (k && v) {
+            if (k === 'labelWidth' || k === 'labelLength') opts[k] = parseInt(v, 10);
+            else opts[k] = v;
+          }
+        });
+        printerInfo.setConfig(opts);
+        socket.write('ACK: CONFIG UPDATED');
+        socket.end();
+        return;
+      }
       // IMG protocol (simple): starts with 'IMG\n'
->>>>>>> 1283468 (Version 3: Dashboard improvements (drag-and-drop upload, advanced log viewer, status alerts, panel simulation, queue controls, config UI, error simulation, history filters, image download, command preview))
       if (buffer.slice(0,4).toString() === 'IMG\n') {
         if (printBuffer.isFull()) {
           socket.write('NAK: BUFFER FULL');
@@ -131,12 +140,6 @@ function start(port, queue, printerInfo, renderTicket) {
         socket.end();
         return;
       }
-<<<<<<< HEAD
-
-      // fallback
-      queue.addJob({ type: 'tysp', data: asText, meta: { source: remote } });
-      socket.write('OK');
-=======
       // Fallback: treat as text/tysp
       if (printBuffer.isFull()) {
         socket.write('NAK: BUFFER FULL');
@@ -145,7 +148,6 @@ function start(port, queue, printerInfo, renderTicket) {
       }
       printBuffer.addJob({ type: 'tysp', data: asText, meta: { source: remote } });
       socket.write('ACK');
->>>>>>> 1283468 (Version 3: Dashboard improvements (drag-and-drop upload, advanced log viewer, status alerts, panel simulation, queue controls, config UI, error simulation, history filters, image download, command preview))
       socket.end();
     });
 
@@ -157,33 +159,4 @@ function start(port, queue, printerInfo, renderTicket) {
   server.listen(port, () => console.log(`TCP server listening on port ${port}`));
 }
 
-<<<<<<< HEAD
 module.exports = { start };
-=======
-// --- Printer config via TCP ---
-      if (cmd === '~GETCFG') {
-        socket.write(JSON.stringify(printerInfo.getConfig()));
-        socket.end();
-        return;
-      }
-      if (cmd.startsWith('~SETCFG:')) {
-        // Format: ~SETCFG:labelWidth=600,labelLength=900,printMode=TEAR_OFF
-        const kvs = cmd.replace('~SETCFG:', '').split(',');
-        const opts = {};
-        kvs.forEach(kv => {
-          const [k, v] = kv.split('=');
-          if (k && v) {
-            if (k === 'labelWidth' || k === 'labelLength') opts[k] = parseInt(v, 10);
-            else opts[k] = v;
-          }
-        });
-        printerInfo.setConfig(opts);
-        socket.write('ACK: CONFIG UPDATED');
-        socket.end();
-        return;
-      }
-      // --- End of TCP command handler ---
-    });
-
-module.exports = { start };
->>>>>>> 1283468 (Version 3: Dashboard improvements (drag-and-drop upload, advanced log viewer, status alerts, panel simulation, queue controls, config UI, error simulation, history filters, image download, command preview))
