@@ -14,7 +14,7 @@ function looksLikeTysp(text) {
 function start(port, queue, printerInfo, renderTicket) {
   const server = net.createServer(socket => {
     const remote = socket.remoteAddress + ':' + socket.remotePort;
-    console.log(`:satellite_antenna: TCP client connected: ${remote}`);
+  console.log(`TCP client connected: ${remote}`);
     let chunks = [];
 
     socket.on('data', (chunk) => {
@@ -22,12 +22,12 @@ function start(port, queue, printerInfo, renderTicket) {
       // Don't decide until 'end' to allow binary streams
     });
 
-    // --- Bixolon-like error simulation ---
-    let printerStatus = {
-      paperOut: false,
-      coverOpen: false,
-      noInk: false,
-    };
+      // --- Bixolon-like error simulation ---
+      let printerStatus = {
+        paperOut: false,
+        coverOpen: false,
+        noInk: false,
+      };
 
     function getBixolonStatusBytes() {
       // Example: 4 bytes, see Bixolon docs for real mapping
@@ -50,88 +50,13 @@ function start(port, queue, printerInfo, renderTicket) {
     }
 
     socket.on('end', async () => {
-      // --- Comandos propietarios avanzados ---
+      const buffer = Buffer.concat(chunks);
+  const cmd = buffer.toString('utf8').trim();
+
+  // --- Advanced proprietary commands ---
   // ~DG: Download graphic (simulated)
-      if (cmd.startsWith('~DG')) {
-        // ~DGname,size,data
-  socket.write('ACK: GRAPHIC DOWNLOADED (simulated)');
-        socket.end();
-        return;
-      }
-  // ~EG: Delete graphic
-      if (cmd.startsWith('~EG')) {
-  socket.write('ACK: GRAPHIC DELETED (simulated)');
-        socket.end();
-        return;
-      }
-  // ~FM: Download custom font
-      if (cmd.startsWith('~FM')) {
-  socket.write('ACK: FONT DOWNLOADED (simulated)');
-        socket.end();
-        return;
-      }
-  // ~EF: Delete custom font
-      if (cmd.startsWith('~EF')) {
-  socket.write('ACK: FONT DELETED (simulated)');
-        socket.end();
-        return;
-      }
-  // ~GM: Query graphic memory
-      if (cmd.startsWith('~GM')) {
-  socket.write('MEMORY: 1024KB FREE, 128KB USED (simulated)');
-        socket.end();
-        return;
-      }
-  // ~CC: Change country code
-      if (cmd.startsWith('~CC')) {
-  socket.write('ACK: COUNTRY CODE SET (simulated)');
-        socket.end();
-        return;
-      }
-  // ~CT: Change paper type
-      if (cmd.startsWith('~CT')) {
-  socket.write('ACK: PAPER TYPE SET (simulated)');
-        socket.end();
-        return;
-      }
-  // ~TA: Set label alignment
-      if (cmd.startsWith('~TA')) {
-  socket.write('ACK: LABEL ALIGNMENT SET (simulated)');
-        socket.end();
-        return;
-      }
-  // ~PR: Set print speed
-      if (cmd.startsWith('~PR')) {
-  socket.write('ACK: PRINT SPEED SET (simulated)');
-        socket.end();
-        return;
-      }
-  // ~JD: Head diagnostic
-      if (cmd.startsWith('~JD')) {
-  socket.write('HEAD: OK\nTEMP: 32C\nVOLTAGE: 24V (simulated)');
-        socket.end();
-        return;
-      }
-  // ~JE: Query recent errors
-      if (cmd.startsWith('~JE')) {
-  socket.write('ERRORS: NONE (simulated)');
-        socket.end();
-        return;
-      }
-  // ~WC: Query label counter
-      if (cmd.startsWith('~WC')) {
-  socket.write('LABEL COUNT: 12345 (simulated)');
-        socket.end();
-        return;
-      }
-  // ~MP: Power save mode control
-      if (cmd.startsWith('~MP')) {
-  socket.write('ACK: POWER SAVE MODE SET (simulated)');
-        socket.end();
-        return;
-      }
-      // --- ESC/POS status commands ---
-      // DLE EOT n (0x10 0x04 n): Real printers respond with status bytes
+  // --- ESC/POS status commands ---
+  // DLE EOT n (0x10 0x04 n): Real printers respond with status bytes
       if (buffer.length === 3 && buffer[0] === 0x10 && buffer[1] === 0x04) {
         // n: 1=printer, 2=offline, 3=error, 4=paper
         let statusByte = 0x00;
@@ -149,9 +74,7 @@ function start(port, queue, printerInfo, renderTicket) {
         socket.end();
         return;
       }
-      const buffer = Buffer.concat(chunks);
-      // --- Error state toggling for testing ---
-      const cmd = buffer.toString('utf8').trim();
+  // --- Error state toggling for testing ---
   if (cmd === '~ERR_PAPER_OUT') { printerStatus.paperOut = true; socket.write('ACK: PAPER OUT'); socket.end(); return; }
   if (cmd === '~ERR_PAPER_OK') { printerStatus.paperOut = false; socket.write('ACK: PAPER OK'); socket.end(); return; }
   if (cmd === '~ERR_COVER_OPEN') { printerStatus.coverOpen = true; socket.write('ACK: COVER OPEN'); socket.end(); return; }
@@ -165,7 +88,7 @@ function start(port, queue, printerInfo, renderTicket) {
         socket.end();
         return;
       }
-          // --- Advanced proprietary commands ---
+      // --- Advanced proprietary commands ---
       if (buffer.toString('utf8').trim() === '~HS') {
         // ZPL ~HS: Host Status Return
         let status = 'PRINTER STATUS: READY\n';
@@ -177,9 +100,9 @@ function start(port, queue, printerInfo, renderTicket) {
         socket.end();
         return;
       }
-      // --- Soporte propietario: ~HSZ (Host Status Zebra extendido) ---
+      // --- Proprietary support: ~HSZ (Host Status Zebra extended) ---
       if (buffer.toString('utf8').trim() === '~HSZ') {
-          // Reject unsupported languages
+        // Reject unsupported languages
         let status = 'PRINTER STATUS: READY\n';
         status += printBuffer.isFull() ? 'BUFFER: FULL\n' : 'BUFFER: OK\n';
         status += `BUFFER JOBS: ${printBuffer.size()}\n`;
@@ -192,17 +115,17 @@ function start(port, queue, printerInfo, renderTicket) {
         socket.end();
         return;
       }
-      // --- Soporte propietario: ~SD (Set Darkness) ---
+      // --- Proprietary support: ~SD (Set Darkness) ---
       if (buffer.toString('utf8').trim().startsWith('~SD')) {
         // ~SDn: Set darkness level (n=0-30)
         const val = parseInt(buffer.toString('utf8').trim().replace('~SD',''), 10);
-        // Guardar valor en memoria simulada (opcional)
+        // Save value in simulated memory (optional)
         printerInfo.darkness = isNaN(val) ? 10 : val;
         socket.write(`ACK: DARKNESS SET TO ${printerInfo.darkness}`);
         socket.end();
         return;
       }
-      // --- Printer config via TCP ---
+  // --- Printer config via TCP ---
       if (cmd === '~GETCFG') {
         socket.write(JSON.stringify(printerInfo.getConfig()));
         socket.end();
@@ -241,9 +164,9 @@ function start(port, queue, printerInfo, renderTicket) {
       // --- RAW buffer processing with language detection and limits ---
       const MAX_RAW_SIZE = 8 * 1024; // 8 KB typical for Bixolon SP300
       if (buffer.length > MAX_RAW_SIZE) {
-    socket.write('NAK: RAW BUFFER TOO LARGE');
-    // Optional: log event for rejection due to size
-    if (typeof queue?.addTrace === 'function') queue.addTrace(`REJECTED: RAW too large (${buffer.length} bytes)`);
+        socket.write('NAK: RAW BUFFER TOO LARGE');
+        // Optional: log event for rejection due to size
+        if (typeof queue?.addTrace === 'function') queue.addTrace(`REJECTED: RAW too large (${buffer.length} bytes)`);
         socket.end();
         return;
       }
@@ -270,9 +193,9 @@ function start(port, queue, printerInfo, renderTicket) {
         socket.end();
         return;
       } else {
-        // Rechazar lenguajes desconocidos
-  socket.write('NAK: UNSUPPORTED LANGUAGE');
-  if (typeof queue?.addTrace === 'function') queue.addTrace('REJECTED: RAW unsupported language');
+        // Reject unsupported languages
+        socket.write('NAK: UNSUPPORTED LANGUAGE');
+        if (typeof queue?.addTrace === 'function') queue.addTrace('REJECTED: RAW unsupported language');
         socket.end();
         return;
       }

@@ -23,6 +23,22 @@ if (!fs.existsSync(TO_PRINT_DIR)) fs.mkdirSync(TO_PRINT_DIR, { recursive: true }
 
 const queue = new PrintQueue(PRINTS_DIR);
 const printBuffer = new PrintBuffer(20); // buffer size configurable
+
+// Background loop to move jobs from printBuffer to queue
+async function startPrintBufferDrainer() {
+  while (true) {
+    if (!printBuffer.isEmpty()) {
+      const job = printBuffer.getNextJob();
+      if (job) {
+        queue.addJob(job);
+        // Log in English
+        console.log('Moved job from print buffer to main queue:', job.type);
+      }
+    }
+    await new Promise(res => setTimeout(res, 100));
+  }
+}
+startPrintBufferDrainer();
 const printerMemory = new PrinterMemory(40, 20); // graphics/fonts memory configurable
 const printerInfo = new PrinterInfo('Bixolon SP300 Emulator', 9100, 'TCP', queue);
 

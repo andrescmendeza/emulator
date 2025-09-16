@@ -12,7 +12,10 @@ function start(port, queue, printerInfo) {
 
   // Static files
   app.use('/prints', express.static(path.join(__dirname, '../prints')));
+  app.use('/to_print', express.static(path.join(__dirname, '../to_print')));
   app.use('/static', express.static(path.join(__dirname, '../'))); // serve dashboard.html and assets
+  // Servir archivos estáticos raíz (incluye prints-list.html)
+  app.use(express.static(path.join(__dirname, '../')));
 
   // JSON endpoints
   app.get('/api/queue', (req, res) => res.json(queue.getQueue()));
@@ -58,11 +61,16 @@ function start(port, queue, printerInfo) {
 
   // Periodic broadcast of status + queue + history + trace
   setInterval(() => {
+      // Always send both printers, even if undefined
+      const info = printerInfo.getInfo() || {};
       broadcast({
         type: 'status',
-        printers: printerInfo.getInfo(),
+        printers: {
+          bixolon: info.bixolon || { name: 'Bixolon', protocol: 'TCP', port: 9100, power: false, queueLength: 0, lastJobs: [] },
+          epson: info.epson || { name: 'Epson', protocol: 'TCP', port: 9200, power: false, queueLength: 0, lastJobs: [] }
+        },
         queue: queue.getQueue(),
-        history: queue.getHistory().slice(0, 30),
+        history: queue.getHistory(),
         trace: queue.getTrace().slice(0, 100)
       });
   }, 800);

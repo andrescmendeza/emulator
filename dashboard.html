@@ -182,15 +182,13 @@
   };
 
   function updatePrinters(printers) {
-    // Bixolon
-    const bix = printers.bixolon;
+    // Defensive: always define both printers
+    const bix = (printers && printers.bixolon) || { name: 'Bixolon', protocol: 'TCP', port: 9100, power: false, queueLength: 0, lastJobs: [] };
+    const eps = (printers && printers.epson) || { name: 'Epson', protocol: 'TCP', port: 9200, power: false, queueLength: 0, lastJobs: [] };
     document.getElementById('status-bixolon').textContent = bix.power ? 'Online' : 'Offline';
     document.getElementById('power-bixolon').className = bix.power ? 'btn btn-sm btn-outline-success' : 'btn btn-sm btn-outline-danger';
-    // Epson
-    const eps = printers.epson;
     document.getElementById('status-epson').textContent = eps.power ? 'Online' : 'Offline';
     document.getElementById('power-epson').className = eps.power ? 'btn btn-sm btn-outline-success' : 'btn btn-sm btn-outline-danger';
-    // Printer Info panel (shows Bixolon by default)
     document.getElementById('p-name').textContent = bix.name;
     document.getElementById('p-proto').textContent = bix.protocol;
     document.getElementById('p-port').textContent = bix.port;
@@ -200,6 +198,8 @@
     if (curr) {
       document.getElementById('current-print-meta').innerHTML = `<b>${curr.type}</b> - ${curr.file} <br><small>${new Date(curr.processedAt).toLocaleString()}</small>`;
       if (!selected) showTicket();
+    } else {
+      document.getElementById('current-print-meta').innerHTML = '';
     }
   }
 
@@ -268,15 +268,42 @@
   }
 
   function updateHistory(h) {
-    historyData = h;
+    // Log visual del tamaño y contenido de historyData
+    const logDiv = document.getElementById('history-log');
+    if (logDiv) {
+      logDiv.innerHTML = `<b>historyData.length:</b> ${historyData.length}<br><b>IDs:</b> ${historyData.map(x => x.id || '').join(', ')}`;
+    }
+// Listar todas las imágenes generadas en /prints
+async function listPrintImages() {
+  const container = document.getElementById('prints-list');
+  if (!container) return;
+  try {
+    const res = await fetch('/prints');
+    const html = await res.text();
+    // Buscar archivos .png en el HTML de listado
+    const matches = Array.from(html.matchAll(/href="([^"]+\.png)"/g));
+    if (matches.length === 0) {
+      container.innerHTML = '<div class="text-muted">No images found in /prints</div>';
+      return;
+    }
+    container.innerHTML = matches.map(m => `<a href="/prints/${m[1]}" target="_blank">${m[1]}</a>`).join('<br>');
+  } catch (e) {
+    container.innerHTML = '<div class="text-danger">Error loading /prints</div>';
+  }
+}
+document.addEventListener('DOMContentLoaded', listPrintImages);
+    // Solo actualiza si el nuevo historial es igual o mayor al actual
+    if (Array.isArray(h) && h.length >= historyData.length) {
+      historyData = h;
+    }
     const list = document.getElementById('history-list');
     list.innerHTML = '';
-    if (!h || h.length === 0) {
+    if (!historyData || historyData.length === 0) {
       list.innerHTML = '<div class="text-muted">No prints yet</div>';
       return;
     }
     // Apply filters
-    let filtered = h.filter(item => {
+    let filtered = historyData.filter(item => {
       if (historyFilters.type && item.type !== historyFilters.type) return false;
       if (historyFilters.text) {
         const txt = (item.raw || '') + (item.file || '') + (item.type || '');
@@ -301,7 +328,7 @@
       });
     }
     filtered.forEach((item, idx) => {
-      const origIdx = h.indexOf(item);
+      const origIdx = historyData.indexOf(item);
       const div = document.createElement('div');
       div.className = 'history-item';
       let btns = `<button class="btn btn-sm btn-outline-primary" onclick="onView(${origIdx})">View</button>
@@ -339,6 +366,7 @@
       list.appendChild(div);
     });
   }
+  }
 
   function onView(idx) {
     const item = historyData[idx];
@@ -351,17 +379,18 @@
   function showTicket(fileName) {
     const viewer = document.getElementById('viewer-area');
     viewer.innerHTML = '';
+    if (!fileName) {
+      viewer.innerHTML = '<div class="text-muted">No print selected</div>';
+      return;
+    }
     const img = document.createElement('img');
     img.className = 'img-preview';
-    img.src = fileName ? `/prints/${fileName}` : `/to_print/latest_ticket.png?rand=${Math.random()}`;
+    img.src = `/prints/${fileName}`;
     img.onerror = () => { viewer.innerHTML = '<div class="text-muted">Image not available</div>'; };
     viewer.appendChild(img);
   }
 
-  // periodically refresh the latest ticket if no manual selection
-  setInterval(() => {
-    if (!selected) showTicket();
-  }, 1000);
+  // Ya no se refresca automáticamente el visor, solo al hacer click en view
 
   // upload form
   const form = document.getElementById('uploadForm');
@@ -460,12 +489,12 @@
   }
 
   function downloadImage(filename) {
-    const link = document.createElement('a');
-    link.href = `/to_print/${filename}`;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const link = document.createElement('a');
+  link.href = `/prints/${filename}`;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
   }
 
   function downloadLogs() {

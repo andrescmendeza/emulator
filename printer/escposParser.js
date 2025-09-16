@@ -4,11 +4,22 @@ const BWIPJS = require('bwip-js');
 const PDF417 = require('pdf417-generator');
 const fs = require('fs');
 const path = require('path');
-// ...existing code...
+
+async function renderToImage(bytes, printsDir, width = 384, fontFamily = 'monospace') {
+  let i = 0, y = 0;
+  let bold = false, underline = false, doubleWidth = false, doubleHeight = false, align = 'left', fontSize = 18, inverted = false;
+  let cut = false, cutType = 'full', cashDrawer = false;
+  let currLine = '', lines = [], graphics = [], lineHeight = 22;
+  function flushLine() {
+    if (currLine.length) {
+      lines.push({ text: currLine, bold, underline, doubleWidth, doubleHeight, align, fontSize, inverted });
+      currLine = '';
+    }
+  }
   while (i < bytes.length) {
     const b = bytes[i];
     // ESC = 0x1B, GS = 0x1D, FS = 0x1C
-  if (b === 0x1B) { // ESC
+    if (b === 0x1B) { // ESC
       const n = bytes[i+1];
       switch (n) {
         case 0x40: // ESC @ Initialize
@@ -52,7 +63,6 @@ const path = require('path');
           break;
         case 0x56: // ESC V (cut)
           cut = true;
-          // ESC V m: m=0 full, m=1 partial, m=66 programmable
           if (bytes[i+2] === 0) cutType = 'full';
           else if (bytes[i+2] === 1) cutType = 'partial';
           else cutType = 'program';
@@ -60,7 +70,6 @@ const path = require('path');
           break;
         case 0x70: // ESC p (cash drawer)
           cashDrawer = true;
-          // Optionally, you can add more logic to simulate pulse duration, pin, etc.
           i += 4;
           break;
         default:
@@ -74,26 +83,18 @@ const path = require('path');
           i += 3;
           break;
         case 0x6B: // GS k (barcode)
-          // GS k m d1..dn NUL
           const barcodeType = bytes[i+2];
           let j = i+3;
           let data = [];
           while (j < bytes.length && bytes[j] !== 0) { data.push(bytes[j]); j++; }
           const barcodeData = Buffer.from(data).toString('ascii');
-          // barcodeType: 0-6 = 1D, 67 = PDF417, 71 = DataMatrix (ESC/POS extended)
-          if (barcodeType === 67) { // PDF417 (example custom code)
-            graphics.push({ type: 'pdf417', data: barcodeData });
-          } else if (barcodeType === 71) { // DataMatrix (example custom code)
-            graphics.push({ type: 'datamatrix', data: barcodeData });
-          } else {
-            graphics.push({ type: 'barcode', barcodeType, data: barcodeData });
-          }
+          if (barcodeType === 67) { graphics.push({ type: 'pdf417', data: barcodeData }); }
+          else if (barcodeType === 71) { graphics.push({ type: 'datamatrix', data: barcodeData }); }
+          else { graphics.push({ type: 'barcode', barcodeType, data: barcodeData }); }
           i = j+1;
           break;
         case 0x28: // GS ( k (QR code)
-          // GS ( k pL pH cn fn ...
-          // We'll look for fn=49 (store), then fn=81 (print)
-          if (bytes[i+4] === 49) { // store
+          if (bytes[i+4] === 49) {
             let qrData = '';
             let qrLen = bytes[i+2] + (bytes[i+3]<<8) - 3;
             for (let q=0; q<qrLen; ++q) qrData += String.fromCharCode(bytes[i+8+q]);
@@ -102,7 +103,6 @@ const path = require('path');
           i += 8 + (bytes[i+2] + (bytes[i+3]<<8) - 3);
           break;
         case 0x76: // GS v 0 (raster bit image)
-          // GS v 0 m xL xH yL yH d1... (bit image)
           const m = bytes[i+2];
           const xL = bytes[i+3], xH = bytes[i+4];
           const yL = bytes[i+5], yH = bytes[i+6];
@@ -127,26 +127,19 @@ const path = require('path');
         default:
           i += 2;
       }
-    } else if (b === 0x0A || b === 0x0D) { // LF/CR
-      flushLine();
-      i++;
-    } else if (b >= 0x20 && b <= 0x7E) { // printable ASCII
-      currLine += String.fromCharCode(b);
-      i++;
-    } else {
-      i++;
-    }
+    } else if (b === 0x0A || b === 0x0D) { flushLine(); i++; }
+    else if (b >= 0x20 && b <= 0x7E) { currLine += String.fromCharCode(b); i++; }
+    else { i++; }
   }
   flushLine();
 
-  // Estimate height
   let estHeight = lines.length * lineHeight * 1.2 + 100;
   for (const g of graphics) {
-  if (g.type === 'barcode') estHeight += 60;
-  if (g.type === 'qr') estHeight += 120;
-  if (g.type === 'pdf417') estHeight += 120;
-  if (g.type === 'datamatrix') estHeight += 120;
-  if (g.type === 'bitmap') estHeight += g.height + 10;
+    if (g.type === 'barcode') estHeight += 60;
+    if (g.type === 'qr') estHeight += 120;
+    if (g.type === 'pdf417') estHeight += 120;
+    if (g.type === 'datamatrix') estHeight += 120;
+    if (g.type === 'bitmap') estHeight += g.height + 10;
   }
   const height = Math.max(300, estHeight);
   const canvas = createCanvas(width, height);
@@ -156,13 +149,13 @@ const path = require('path');
 
   y = 30;
   let gIdx = 0;
-  for (const ln of lines) {
+  for (let l = 0; l < lines.length; l++) {
+    const ln = lines[l];
     ctx.save();
     ctx.font = `${ln.bold ? 'bold ' : ''}${ln.doubleHeight ? ln.fontSize*2 : ln.fontSize}px ${ln.fontFamily || fontFamily}`;
     ctx.textBaseline = 'top';
     ctx.fillStyle = '#000';
     if (ln.inverted) {
-      // Draw background rectangle first
       const metrics = ctx.measureText(ln.text);
       let tx = 10;
       if (ln.align === 'center') tx = width/2 - metrics.width/2;
@@ -192,11 +185,9 @@ const path = require('path');
     }
     y += (ln.doubleHeight ? ln.fontSize*2 : ln.fontSize) + 8;
     ctx.restore();
-    // After each line, check for graphics to render
     while (gIdx < graphics.length) {
       const g = graphics[gIdx];
       if (g.type === 'barcode') {
-        // Simple barcode: draw as text with box
         ctx.save();
         ctx.font = '24px monospace';
         ctx.textAlign = 'center';
@@ -206,13 +197,11 @@ const path = require('path');
         ctx.restore();
         y += 60;
       } else if (g.type === 'qr') {
-        // Use qrcode package to draw QR
         const qrCanvas = createCanvas(100, 100);
         await QRCode.toCanvas(qrCanvas, g.data, { margin: 1 });
         ctx.drawImage(qrCanvas, width/2-50, y);
         y += 110;
       } else if (g.type === 'pdf417') {
-        // Use pdf417-generator to draw PDF417
         const pdf417 = PDF417(g.data);
         const rows = pdf417.rows;
         const cols = pdf417.cols;
@@ -232,7 +221,6 @@ const path = require('path');
         ctx.drawImage(pdfCanvas, width/2-cols, y);
         y += rows*cellSize + 10;
       } else if (g.type === 'datamatrix') {
-        // Use bwip-js to draw DataMatrix
         try {
           const png = await BWIPJS.toBuffer({
             bcid: 'datamatrix',
@@ -250,14 +238,11 @@ const path = require('path');
           y += 20;
         }
       } else if (g.type === 'bitmap') {
-        // Improved raster bit image rendering: grayscale & antialiasing effect
         const img = ctx.createImageData(g.width, g.height);
         for (let yy=0; yy<g.height; ++yy) {
           for (let xx=0; xx<g.width; ++xx) {
             const idx = (yy*g.width+xx)*4;
-            // Simulate grayscale dithering for more realistic output
             let v = g.data[yy][xx] ? 0 : 255;
-            // Simple antialiasing: average with neighbors if possible
             if (yy > 0 && xx > 0 && yy < g.height-1 && xx < g.width-1) {
               let sum = 0;
               let count = 0;
@@ -280,13 +265,11 @@ const path = require('path');
     }
   }
 
-  // Draw cut/cash drawer indicators
   if (cut) {
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 3;
     ctx.beginPath();
     if (cutType === 'partial') {
-      // Dashed line for partial cut
       const dash = 10, gap = 10;
       let x = 0;
       while (x < width) {
@@ -296,7 +279,6 @@ const path = require('path');
       }
       ctx.setLineDash([dash, gap]);
     } else {
-      // Solid line for full cut or default
       ctx.setLineDash([]);
       ctx.moveTo(0, y+10);
       ctx.lineTo(width, y+10);
@@ -318,14 +300,19 @@ const path = require('path');
     ctx.font = 'bold 16px monospace';
     ctx.fillStyle = '#080';
     ctx.fillText('CASH DRAWER OPEN', width/2-80, y+10);
-    // Optionally, draw a simple icon or animation here
     y += 30;
   }
 
-  if (!fs.existsSync(printsDir)) fs.mkdirSync(printsDir, { recursive: true });
-  const filename = `escpos-${Date.now()}.png`;
-  fs.writeFileSync(path.join(printsDir, filename), canvas.toBuffer('image/png'));
-  return filename;
-
-module.exports = { renderToImage };
+  try {
+    if (!fs.existsSync(printsDir)) fs.mkdirSync(printsDir, { recursive: true });
+    const filename = `escpos-${Date.now()}.png`;
+    const outPath = path.join(printsDir, filename);
+    fs.writeFileSync(outPath, canvas.toBuffer('image/png'));
+    console.log(`[escposParser] Image written: ${outPath}`);
+    return filename;
+  } catch (err) {
+    console.error('[escposParser] Error writing image:', err);
+    throw err;
+  }
+}
 module.exports = { renderToImage };

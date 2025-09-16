@@ -28,6 +28,7 @@ function sendEscPos(buffer) {
 }
 
 module.exports = async function runTest() {
+  console.log('--- INICIO DE TEST DE IMPRESIÓN ---');
   // TYSP test with brackets
   const tysp1 = `
 [ALIGN CENTER]
@@ -41,18 +42,33 @@ module.exports = async function runTest() {
 [FEED 2]
 [BARCODE] 123456789012
 `;
-  await sendTysp(tysp1);
-  console.log('Sent TySP test (brackets)');
+  console.log('Enviando TySP test (brackets)...');
+  try {
+    await sendTysp(tysp1);
+    console.log('Sent TySP test (brackets)');
+  } catch (err) {
+    console.error('Error enviando TySP test (brackets):', err);
+  }
 
   // TYSP test in ZPL style
   const tysp2 = `^XA^FO50,50^A0N,40,40^FDLatte - Medium^FS^FO50,100^BCN,100,Y,N,N^FD987654321^FS^XZ`;
-  await sendTysp(tysp2);
-  console.log('Sent TySP test (ZPL style)');
+  console.log('Enviando TySP test (ZPL style)...');
+  try {
+    await sendTysp(tysp2);
+    console.log('Sent TySP test (ZPL style)');
+  } catch (err) {
+    console.error('Error enviando TySP test (ZPL style):', err);
+  }
 
   // ESC/POS test
   const esc = Buffer.from([0x1B,0x40,0x1B,0x61,0x01, ...Buffer.from('ESC/POS Test\n'), 0x1D,0x56,0x00]);
-  await sendEscPos(esc);
-  console.log('Sent ESC/POS test');
+  console.log('Enviando ESC/POS test...');
+  try {
+    await sendEscPos(esc);
+    console.log('Sent ESC/POS test');
+  } catch (err) {
+    console.error('Error enviando ESC/POS test:', err);
+  }
 
   // RAW ESC/POS test for coffee beverage label
   // Simulates: initialize, center, print name, size, customer, barcode, cut
@@ -68,8 +84,13 @@ module.exports = async function runTest() {
     Buffer.from([0x0A]), // LF
     Buffer.from([0x1D,0x56,0x00]) // GS V 0 (cut)
   ]);
-  await sendEscPos(cafeLabel);
-  console.log('Sent RAW ESC/POS coffee label test');
+  console.log('Enviando RAW ESC/POS coffee label test...');
+  try {
+    await sendEscPos(cafeLabel);
+    console.log('Sent RAW ESC/POS coffee label test');
+  } catch (err) {
+    console.error('Error enviando RAW ESC/POS coffee label test:', err);
+  }
 
   // RAW ZPL test for coffee beverage label
   const zplLabel = Buffer.from(`^XA
@@ -79,6 +100,12 @@ module.exports = async function runTest() {
 ^FO50,180^A0N,30,30^FDTime: 10:30^FS
 ^FO50,220^BCN,100,Y,N,N^FD1234567890^FS
 ^XZ`);
-  await sendEscPos(zplLabel);
-  console.log('Sent RAW ZPL coffee label test');
+  console.log('Enviando RAW ZPL coffee label test...');
+  try {
+    await sendEscPos(zplLabel);
+    console.log('Sent RAW ZPL coffee label test');
+  } catch (err) {
+    console.error('Error enviando RAW ZPL coffee label test:', err);
+  }
+  console.log('--- FIN DE TEST DE IMPRESIÓN ---');
 };
